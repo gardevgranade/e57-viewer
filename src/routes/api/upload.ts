@@ -5,6 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { createJob } from '../../lib/jobStore.js'
+import type { FileType } from '../../lib/jobStore.js'
+
+const ACCEPTED: Record<string, FileType> = {
+  e57: 'e57',
+  dae: 'dae',
+  obj: 'obj',
+  skp: 'skp',
+}
 
 export const Route = createFileRoute('/api/upload')({
   component: () => null,
@@ -29,21 +37,23 @@ export const Route = createFileRoute('/api/upload')({
           })
         }
 
-        if (!file.name.toLowerCase().endsWith('.e57')) {
+        const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+        const fileType = ACCEPTED[ext]
+        if (!fileType) {
           return new Response(
-            JSON.stringify({ error: 'Only .e57 files are accepted' }),
+            JSON.stringify({ error: 'Unsupported file type. Accepted: .e57, .dae, .obj, .skp' }),
             { status: 400, headers: { 'content-type': 'application/json' } },
           )
         }
 
         const bytes = await file.arrayBuffer()
-        const filePath = join(tmpdir(), `e57-upload-${randomUUID()}.e57`)
+        const filePath = join(tmpdir(), `model-upload-${randomUUID()}.${ext}`)
         await writeFile(filePath, Buffer.from(bytes))
 
-        const job = createJob(filePath)
+        const job = createJob(filePath, fileType)
 
         return new Response(
-          JSON.stringify({ jobId: job.id, fileName: file.name, size: file.size }),
+          JSON.stringify({ jobId: job.id, fileName: file.name, size: file.size, fileType }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       },

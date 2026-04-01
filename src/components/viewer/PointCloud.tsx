@@ -36,7 +36,7 @@ interface PointCloudProps {
 }
 
 export default function PointCloud({ flyCameraRef }: PointCloudProps) {
-  const { jobId, streamStatus, pointSize, colorMode, addLoadedPoints, setDone, setError, objectQuaternion, bbox } =
+  const { jobId, streamStatus, pointSize, colorMode, addLoadedPoints, setDone, setError, objectQuaternion, bbox, fileType } =
     useViewer()
 
   const pointsRef = useRef<THREE.Points>(null!)
@@ -155,9 +155,10 @@ export default function PointCloud({ flyCameraRef }: PointCloudProps) {
     }
   }, [colorMode, material])
 
-  // Stream handler
+  // Stream handler — only for E57 point clouds
   useEffect(() => {
     if (!jobId || streamStatus !== 'streaming') return
+    if (fileType && fileType !== 'e57') return // mesh formats handled by MeshModel
 
     console.debug('[PointCloud] Starting stream for job', jobId)
 
@@ -338,7 +339,7 @@ export default function PointCloud({ flyCameraRef }: PointCloudProps) {
       clearInterval(readyStateTimer)
       es.close()
     }
-  }, [jobId, streamStatus, geometry, material, camera, addLoadedPoints, setDone, setError])
+  }, [jobId, streamStatus, fileType, geometry, material, camera, addLoadedPoints, setDone, setError])
 
   return (
     <group ref={groupRef} position={groupPosition}>

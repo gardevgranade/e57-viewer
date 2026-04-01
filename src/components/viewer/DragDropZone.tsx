@@ -1,6 +1,13 @@
 import { useCallback, useRef, useState } from 'react'
 import { useViewer } from '../../lib/viewerState.js'
 
+const ACCEPTED_EXTENSIONS = ['.e57', '.dae', '.obj', '.skp']
+const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.join(',')
+
+function getExtension(name: string) {
+  return name.split('.').pop()?.toLowerCase() ?? ''
+}
+
 export default function DragDropZone() {
   const {
     streamStatus,
@@ -9,6 +16,7 @@ export default function DragDropZone() {
     setUploading,
     setJobId,
     setStreamStatus,
+    setFileType,
     setError,
     reset,
   } = useViewer()
@@ -17,8 +25,9 @@ export default function DragDropZone() {
 
   const handleFile = useCallback(
     async (file: File) => {
-      if (!file.name.toLowerCase().endsWith('.e57')) {
-        setError('Only .e57 files are supported')
+      const ext = getExtension(file.name)
+      if (!ACCEPTED_EXTENSIONS.includes(`.${ext}`)) {
+        setError(`Unsupported file type. Accepted: ${ACCEPTED_EXTENSIONS.join(', ')}`)
         return
       }
       reset()
@@ -36,13 +45,14 @@ export default function DragDropZone() {
           return
         }
 
+        setFileType(json.fileType ?? ext)
         setJobId(json.jobId)
         setStreamStatus('streaming')
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Upload failed')
       }
     },
-    [reset, setUploading, setJobId, setStreamStatus, setError],
+    [reset, setUploading, setJobId, setStreamStatus, setFileType, setError],
   )
 
   const onDrop = useCallback(
@@ -112,7 +122,7 @@ export default function DragDropZone() {
       <input
         ref={inputRef}
         type="file"
-        accept=".e57"
+        accept={ACCEPT_ATTR}
         className="hidden"
         onChange={onInputChange}
       />
@@ -121,9 +131,10 @@ export default function DragDropZone() {
       </div>
       <div>
         <p className="text-base font-semibold text-white">
-          {isDragging ? 'Drop your E57 file' : 'Drop an E57 file here'}
+          {isDragging ? 'Drop your 3D file' : 'Drop a 3D file here'}
         </p>
         <p className="mt-1 text-sm text-white/50">or click to browse</p>
+        <p className="mt-1 text-xs text-white/30">E57 · DAE · OBJ · SKP</p>
       </div>
     </div>
   )

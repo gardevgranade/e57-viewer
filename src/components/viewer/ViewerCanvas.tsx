@@ -6,6 +6,7 @@ import { GizmoHelper, GizmoViewport, Grid } from '@react-three/drei'
 import { useViewer } from '../../lib/viewerState.js'
 import PointCloud from './PointCloud.js'
 import MeshOverlay from './MeshOverlay.js'
+import MeshModel from './MeshModel.js'
 import ViewerControls from './ViewerControls.js'
 import FlyCamera, { type FlyCameraHandle } from './FlyCamera.js'
 
@@ -32,8 +33,9 @@ function SceneGrid() {
 }
 
 export default function ViewerCanvas() {
-  const { streamStatus } = useViewer()
+  const { streamStatus, fileType } = useViewer()
   const isActive = streamStatus === 'streaming' || streamStatus === 'done'
+  const isMesh = fileType && fileType !== 'e57'
   const flyCameraRef = useRef<FlyCameraHandle>(null)
 
   return (
@@ -53,8 +55,14 @@ export default function ViewerCanvas() {
         <directionalLight position={[10, 10, 5]} intensity={0.8} />
 
         <Suspense fallback={null}>
-          <PointCloud flyCameraRef={flyCameraRef} />
-          <MeshOverlay />
+          {isMesh ? (
+            <MeshModel flyCameraRef={flyCameraRef} />
+          ) : (
+            <>
+              <PointCloud flyCameraRef={flyCameraRef} />
+              <MeshOverlay />
+            </>
+          )}
           {/* Grid always visible — gives spatial reference before and after loading */}
           <SceneGrid />
         </Suspense>

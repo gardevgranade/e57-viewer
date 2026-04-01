@@ -10,6 +10,7 @@ export default function ViewerControls() {
     pointSize,
     colorMode,
     showMesh,
+    fileType,
     setPointSize,
     setColorMode,
     setShowMesh,
@@ -18,6 +19,7 @@ export default function ViewerControls() {
     resetObjectRotation,
   } = useViewer()
 
+  const isMesh = fileType && fileType !== 'e57'
   const isDone = streamStatus === 'done'
   const isStreaming = streamStatus === 'streaming'
   const isUploading = streamStatus === 'uploading'
@@ -86,78 +88,79 @@ export default function ViewerControls() {
       {isStreaming && (
         <div className="rounded-xl border border-white/10 bg-black/50 px-4 py-3 backdrop-blur-sm">
           <div className="mb-2 flex items-center justify-between text-xs text-white/60">
-            {isConnecting ? (
-              <span className="flex items-center gap-2">
-                <SpinnerIcon className="h-3 w-3 animate-spin text-teal-400" />
-                Connecting to stream…
-              </span>
-            ) : (
-              <span>Streaming point cloud…</span>
-            )}
-            <span>{loadedPoints.toLocaleString()} pts</span>
+            <span className="flex items-center gap-2">
+              <SpinnerIcon className="h-3 w-3 animate-spin text-teal-400" />
+              {isMesh ? 'Loading model…' : isConnecting ? 'Connecting to stream…' : 'Streaming point cloud…'}
+            </span>
+            {!isMesh && <span>{loadedPoints.toLocaleString()} pts</span>}
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-            <div
-              className={[
-                'h-full rounded-full transition-all duration-300',
-                isConnecting ? 'w-1/3 animate-pulse bg-teal-400/50' : 'bg-teal-400',
-              ].join(' ')}
-              style={isConnecting ? {} : { width: totalPoints > 0 ? `${progress * 100}%` : '0%' }}
-            />
-          </div>
+          {!isMesh && (
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className={[
+                  'h-full rounded-full transition-all duration-300',
+                  isConnecting ? 'w-1/3 animate-pulse bg-teal-400/50' : 'bg-teal-400',
+                ].join(' ')}
+                style={isConnecting ? {} : { width: totalPoints > 0 ? `${progress * 100}%` : '0%' }}
+              />
+            </div>
+          )}
         </div>
       )}
 
       {/* Controls panel */}
       {(isDone || isStreaming) && (
         <div className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-black/60 px-4 py-3 backdrop-blur-sm">
-          {/* Stats */}
-          {isDone && (
+          {/* Stats — hide point count for mesh models */}
+          {isDone && !isMesh && (
             <span className="text-xs text-white/50">
               {totalPoints.toLocaleString()} pts
             </span>
           )}
 
-          <div className="h-4 w-px bg-white/10" />
-
-          {/* Point size */}
-          <label className="flex items-center gap-2 text-xs text-white/70">
-            Size
-            <input
-              type="range"
-              min={0.5}
-              max={6}
-              step={0.5}
-              value={pointSize}
-              onChange={(e) => setPointSize(parseFloat(e.target.value))}
-              className="w-20 accent-teal-400"
-            />
-            <span className="w-5 text-right">{pointSize}</span>
-          </label>
-
-          <div className="h-4 w-px bg-white/10" />
-
-          {/* Color mode */}
-          <label className="flex items-center gap-2 text-xs text-white/70">
-            Color
-            <select
-              value={colorMode}
-              onChange={(e) => setColorMode(e.target.value as any)}
-              className="rounded-md bg-white/10 px-2 py-1 text-xs text-white outline-none hover:bg-white/20 transition"
-            >
-              {hasColor && <option value="rgb">RGB</option>}
-              {hasIntensity && <option value="intensity">Intensity</option>}
-              <option value="height">Height</option>
-              {!hasColor && !hasIntensity && <option value="rgb">Default</option>}
-            </select>
-          </label>
-
-          {isDone && (
+          {/* Point cloud only controls */}
+          {!isMesh && (
             <>
               <div className="h-4 w-px bg-white/10" />
-              {/* Mesh toggle */}
-              <button
-                onClick={() => setShowMesh(!showMesh)}
+
+              {/* Point size */}
+              <label className="flex items-center gap-2 text-xs text-white/70">
+                Size
+                <input
+                  type="range"
+                  min={0.5}
+                  max={6}
+                  step={0.5}
+                  value={pointSize}
+                  onChange={(e) => setPointSize(parseFloat(e.target.value))}
+                  className="w-20 accent-teal-400"
+                />
+                <span className="w-5 text-right">{pointSize}</span>
+              </label>
+
+              <div className="h-4 w-px bg-white/10" />
+
+              {/* Color mode */}
+              <label className="flex items-center gap-2 text-xs text-white/70">
+                Color
+                <select
+                  value={colorMode}
+                  onChange={(e) => setColorMode(e.target.value as any)}
+                  className="rounded-md bg-white/10 px-2 py-1 text-xs text-white outline-none hover:bg-white/20 transition"
+                >
+                  {hasColor && <option value="rgb">RGB</option>}
+                  {hasIntensity && <option value="intensity">Intensity</option>}
+                  <option value="height">Height</option>
+                  {!hasColor && !hasIntensity && <option value="rgb">Default</option>}
+                </select>
+              </label>
+
+              {isDone && (
+                <>
+                  <div className="h-4 w-px bg-white/10" />
+                  {/* Mesh toggle */}
+                  <button
+                    onClick={() => setShowMesh(!showMesh)}
                 className={[
                   'rounded-md px-3 py-1 text-xs font-medium transition',
                   showMesh
@@ -167,6 +170,8 @@ export default function ViewerControls() {
               >
                 {showMesh ? '✓ Mesh' : 'Mesh'}
               </button>
+            </>
+          )}
             </>
           )}
         </div>

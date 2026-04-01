@@ -3,6 +3,7 @@ import { unlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 
 export type JobStatus = 'pending' | 'streaming' | 'done' | 'error'
+export type FileType = 'e57' | 'obj' | 'dae' | 'skp'
 
 export interface BoundingBox {
   minX: number
@@ -16,6 +17,7 @@ export interface BoundingBox {
 export interface Job {
   id: string
   filePath: string
+  fileType: FileType
   status: JobStatus
   totalPoints: number
   bbox: BoundingBox | null
@@ -32,10 +34,11 @@ if (!g[STORE_KEY]) g[STORE_KEY] = new Map<string, Job>()
 const store: Map<string, Job> = g[STORE_KEY]!
 const TTL_MS = 5 * 60 * 1000 // 5 minutes
 
-export function createJob(filePath: string): Job {
+export function createJob(filePath: string, fileType: FileType): Job {
   const job: Job = {
     id: randomUUID(),
     filePath,
+    fileType,
     status: 'pending',
     totalPoints: 0,
     bbox: null,

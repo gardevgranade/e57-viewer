@@ -13,6 +13,7 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiUploadRouteImport } from './routes/api/upload'
 import { Route as ApiStreamJobIdRouteImport } from './routes/api/stream.$jobId'
+import { Route as ApiModelJobIdRouteImport } from './routes/api/model.$jobId'
 import { Route as ApiMeshJobIdRouteImport } from './routes/api/mesh.$jobId'
 
 const AboutRoute = AboutRouteImport.update({
@@ -35,6 +36,11 @@ const ApiStreamJobIdRoute = ApiStreamJobIdRouteImport.update({
   path: '/api/stream/$jobId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiModelJobIdRoute = ApiModelJobIdRouteImport.update({
+  id: '/api/model/$jobId',
+  path: '/api/model/$jobId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMeshJobIdRoute = ApiMeshJobIdRouteImport.update({
   id: '/api/mesh/$jobId',
   path: '/api/mesh/$jobId',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/api/upload': typeof ApiUploadRoute
   '/api/mesh/$jobId': typeof ApiMeshJobIdRoute
+  '/api/model/$jobId': typeof ApiModelJobIdRoute
   '/api/stream/$jobId': typeof ApiStreamJobIdRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/api/upload': typeof ApiUploadRoute
   '/api/mesh/$jobId': typeof ApiMeshJobIdRoute
+  '/api/model/$jobId': typeof ApiModelJobIdRoute
   '/api/stream/$jobId': typeof ApiStreamJobIdRoute
 }
 export interface FileRoutesById {
@@ -61,6 +69,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/api/upload': typeof ApiUploadRoute
   '/api/mesh/$jobId': typeof ApiMeshJobIdRoute
+  '/api/model/$jobId': typeof ApiModelJobIdRoute
   '/api/stream/$jobId': typeof ApiStreamJobIdRoute
 }
 export interface FileRouteTypes {
@@ -70,15 +79,23 @@ export interface FileRouteTypes {
     | '/about'
     | '/api/upload'
     | '/api/mesh/$jobId'
+    | '/api/model/$jobId'
     | '/api/stream/$jobId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/api/upload' | '/api/mesh/$jobId' | '/api/stream/$jobId'
+  to:
+    | '/'
+    | '/about'
+    | '/api/upload'
+    | '/api/mesh/$jobId'
+    | '/api/model/$jobId'
+    | '/api/stream/$jobId'
   id:
     | '__root__'
     | '/'
     | '/about'
     | '/api/upload'
     | '/api/mesh/$jobId'
+    | '/api/model/$jobId'
     | '/api/stream/$jobId'
   fileRoutesById: FileRoutesById
 }
@@ -87,6 +104,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   ApiUploadRoute: typeof ApiUploadRoute
   ApiMeshJobIdRoute: typeof ApiMeshJobIdRoute
+  ApiModelJobIdRoute: typeof ApiModelJobIdRoute
   ApiStreamJobIdRoute: typeof ApiStreamJobIdRoute
 }
 
@@ -120,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiStreamJobIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/model/$jobId': {
+      id: '/api/model/$jobId'
+      path: '/api/model/$jobId'
+      fullPath: '/api/model/$jobId'
+      preLoaderRoute: typeof ApiModelJobIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mesh/$jobId': {
       id: '/api/mesh/$jobId'
       path: '/api/mesh/$jobId'
@@ -135,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   ApiUploadRoute: ApiUploadRoute,
   ApiMeshJobIdRoute: ApiMeshJobIdRoute,
+  ApiModelJobIdRoute: ApiModelJobIdRoute,
   ApiStreamJobIdRoute: ApiStreamJobIdRoute,
 }
 export const routeTree = rootRouteImport

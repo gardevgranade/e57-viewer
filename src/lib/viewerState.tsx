@@ -22,6 +22,8 @@ export interface ViewerState {
   showMesh: boolean
   /** Object orientation as a unit quaternion [x, y, z, w]. Identity = [0,0,0,1]. */
   objectQuaternion: Quaternion4
+  /** File type of the loaded model */
+  fileType: string | null
 }
 
 export interface ViewerActions {
@@ -43,6 +45,7 @@ export interface ViewerActions {
   /** Pre-multiply current orientation by a ±90° rotation around one axis. */
   applyObjectRotation: (axis: 'x' | 'y' | 'z', angleDeg: number) => void
   resetObjectRotation: () => void
+  setFileType: (fileType: string | null) => void
 }
 
 const IDENTITY_QUAT: Quaternion4 = [0, 0, 0, 1]
@@ -83,6 +86,7 @@ const initialState: ViewerState = {
   colorMode: 'rgb',
   showMesh: false,
   objectQuaternion: IDENTITY_QUAT,
+  fileType: null,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -128,6 +132,7 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
           objectQuaternion: multiplyQuaternions(axisAngleQuat(axis, angleDeg), s.objectQuaternion),
         })),
       resetObjectRotation: () => setState((s) => ({ ...s, objectQuaternion: IDENTITY_QUAT })),
+      setFileType: (fileType) => setState((s) => ({ ...s, fileType })),
     }),
     [],
   )
