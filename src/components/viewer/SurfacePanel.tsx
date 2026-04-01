@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useViewer } from '../../lib/viewerState.js'
 import type { PickedSurface, SurfaceGroup } from '../../lib/viewerState.js'
 import { detectSurfaces } from '../../lib/surfaceDetect.js'
+import { detectMeshSurfaces } from '../../lib/meshSurfaceDetect.js'
 import * as THREE from 'three'
 
 function fmtArea(m2: number) {
@@ -124,7 +125,7 @@ export default function SurfacePanel() {
     surfaceGroups, addGroup, removeGroup, updateGroup,
     setSurfaceColorMode, surfaceColorMode,
     pickSurfaceMode, setPickSurfaceMode,
-    pointCloudGeoRef,
+    pointCloudGeoRef, meshObjectRef,
   } = useViewer()
 
   const [detecting, setDetecting] = useState(false)
@@ -183,6 +184,24 @@ export default function SurfacePanel() {
     }
   }
 
+  async function handleMeshDetect() {
+    const obj = meshObjectRef.current
+    if (!obj) return
+    setDetecting(true)
+    await new Promise(r => setTimeout(r, 30))
+    try {
+      const detected = detectMeshSurfaces(obj, numSurfaces)
+      const picked: PickedSurface[] = detected.map(d => ({
+        id: d.id, label: d.label, color: d.color, visible: d.visible,
+        groupId: null, area: d.area, worldTriangles: d.worldTriangles,
+        pointIndices: [], pointCount: d.pointCount,
+      }))
+      setSurfaces(picked)
+    } finally {
+      setDetecting(false)
+    }
+  }
+
   function handleClearAll() {
     setSurfaces([])
     setSurfaceColorMode(false)
@@ -218,9 +237,9 @@ export default function SurfacePanel() {
 
       {open && (
         <>
-          {/* ── Mesh: pick-surface toggle ── */}
+          {/* ── Mesh: pick-surface toggle + auto-detect ── */}
           {isMesh && (
-            <div style={{ marginBottom: 8 }}>
+            <div style={{ marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
               <button
                 onClick={() => setPickSurfaceMode(!pickSurfaceMode)}
                 style={{
@@ -234,10 +253,37 @@ export default function SurfacePanel() {
                 🖱 {pickSurfaceMode ? 'Picking… (click to stop)' : 'Pick Surface'}
               </button>
               {pickSurfaceMode && (
-                <div style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center', marginTop: 4 }}>
+                <div style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center' }}>
                   Click any face to select it
                 </div>
               )}
+
+              {/* Auto-detect row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ display: 'flex', gap: 3 }}>
+                  {[3, 5, 8, 10].map(n => (
+                    <button key={n} onClick={() => setNumSurfaces(n)} style={{
+                      background: numSurfaces === n ? '#334155' : 'transparent',
+                      border: '1px solid #334155',
+                      color: numSurfaces === n ? '#e2e8f0' : '#64748b',
+                      borderRadius: 4, padding: '1px 6px', cursor: 'pointer', fontSize: 11,
+                    }}>{n}</button>
+                  ))}
+                </div>
+                <button
+                  onClick={handleMeshDetect}
+                  disabled={detecting}
+                  style={{
+                    flex: 1, padding: '4px 0',
+                    background: detecting ? '#1e293b' : '#0f4c75',
+                    border: `1px solid ${detecting ? '#334155' : '#1a6fa8'}`,
+                    borderRadius: 5, color: detecting ? '#64748b' : '#7dd3fc',
+                    fontWeight: 600, cursor: detecting ? 'not-allowed' : 'pointer', fontSize: 11,
+                  }}
+                >
+                  {detecting ? '⏳…' : '🔍 Auto-Detect'}
+                </button>
+              </div>
             </div>
           )}
 
