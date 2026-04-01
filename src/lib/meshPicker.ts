@@ -10,11 +10,11 @@ export interface PickedRegion {
 // Cache adjacency maps by geometry object to avoid recomputing on every click
 const adjacencyCache = new WeakMap<THREE.BufferGeometry, Map<string, number[]>>()
 
-function edgeKey(a: number, b: number): string {
+export function edgeKey(a: number, b: number): string {
   return a < b ? `${a}_${b}` : `${b}_${a}`
 }
 
-function buildAdjacency(geo: THREE.BufferGeometry): Map<string, number[]> {
+export function buildAdjacency(geo: THREE.BufferGeometry): Map<string, number[]> {
   const cached = adjacencyCache.get(geo)
   if (cached) return cached
 
