@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, GizmoHelper, GizmoViewport } from '@react-three/drei'
+import { CameraControls, GizmoHelper, GizmoViewport } from '@react-three/drei'
 import { useViewer } from '../../lib/viewerState.js'
 import PointCloud from './PointCloud.js'
 import MeshOverlay from './MeshOverlay.js'
@@ -21,7 +21,7 @@ export default function ViewerCanvas() {
       )}
 
       <Canvas
-        camera={{ position: [0, -10, 5], fov: 60, near: 0.01, far: 100_000 }}
+        camera={{ position: [0, -10, 5], fov: 60, near: 0.001, far: 100_000 }}
         gl={{ antialias: false, powerPreference: 'high-performance' }}
         style={{ background: '#0d1117' }}
       >
@@ -33,7 +33,19 @@ export default function ViewerCanvas() {
           <MeshOverlay />
         </Suspense>
 
-        <OrbitControls makeDefault enableDamping dampingFactor={0.05} />
+        <CameraControls
+          makeDefault
+          smoothTime={0.15}
+          draggingSmoothTime={0}
+          minDistance={0.001}
+          maxDistance={50_000}
+          mouseButtons={{
+            left: 1,   // rotate
+            middle: 8, // dolly
+            right: 2,  // truck (pan)
+            wheel: 8,  // dolly
+          }}
+        />
 
         <GizmoHelper alignment="top-right" margin={[60, 60]}>
           <GizmoViewport

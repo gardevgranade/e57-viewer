@@ -1,6 +1,7 @@
 import { useEffect, useRef, useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import type { CameraControlsImpl } from '@react-three/drei'
 import { decodeChunk } from '../../lib/chunkCodec.js'
 import { useViewer } from '../../lib/viewerState.js'
 import type { ColorMode } from '../../lib/viewerState.js'
@@ -271,22 +272,23 @@ export default function PointCloud() {
           hasIntensity: msg.hasIntensity,
         })
         es.close()
-        // Center camera on bounding box
+        // Smoothly fit the camera to the bounding box using CameraControls
         if (msg.bbox) {
           const { minX, minY, minZ: bMinZ, maxX, maxY, maxZ: bMaxZ } = msg.bbox
-          const cx = (minX + maxX) / 2
-          const cy = (minY + maxY) / 2
-          const cz = (bMinZ + bMaxZ) / 2
-          const span = Math.max(maxX - minX, maxY - minY, bMaxZ - bMinZ)
-          camera.position.set(cx, cy - span * 1.5, cz + span * 0.5)
-          // Update OrbitControls target so it keeps looking at the data center
-          // (without this, OrbitControls resets lookAt to origin on the next frame)
-          const orbitControls = controlsRef.current as any
-          if (orbitControls?.target) {
-            orbitControls.target.set(cx, cy, cz)
-            orbitControls.update()
+          const box = new THREE.Box3(
+            new THREE.Vector3(minX, minY, bMinZ),
+            new THREE.Vector3(maxX, maxY, bMaxZ),
+          )
+          const cc = controlsRef.current as CameraControlsImpl | null
+          if (cc?.fitToBox) {
+            cc.fitToBox(box, true, { paddingTop: 0.2, paddingBottom: 0.2, paddingLeft: 0.2, paddingRight: 0.2 })
           } else {
-            camera.lookAt(cx, cy, cz)
+            // fallback when CameraControls isn't mounted yet
+            const center = box.getCenter(new THREE.Vector3())
+            const size = box.getSize(new THREE.Vector3())
+            const span = Math.max(size.x, size.y, size.z)
+            camera.position.set(center.x, center.y - span * 1.5, center.z + span * 0.5)
+            camera.lookAt(center.x, center.y, center.z)
           }
         }
         setDone({
