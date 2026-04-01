@@ -10,27 +10,26 @@ export interface FlyCameraHandle {
 }
 
 /**
- * First-person fly camera — no orbiting around a fixed target.
+ * Camera with orbit left-drag, pan right-drag, scroll zoom, WASD fly.
  *
  * Controls:
- *   Left-drag   — look around (yaw + pitch in place)
- *   Right-drag  — pan (truck perpendicular to view)
- *   Scroll      — fly forward / backward along view direction
+ *   Left-drag   — orbit around the scene center
+ *   Right-drag  — pan (truck camera + shift orbit target together)
+ *   Scroll      — zoom in / out along view direction
  *   W/S         — fly forward / backward
  *   A/D         — strafe left / right
- *   Q/E         — move up / down
+ *   Q/Space     — rise,  E/Shift — descend
  */
 const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
   const { camera, gl } = useThree()
 
-  // Current yaw / pitch of the camera (extracted from its quaternion)
-  const yaw = useRef(0)
-  const pitch = useRef(0)
-  const drag = useRef<null | 'look' | 'pan'>(null)
+  const drag = useRef<null | 'orbit' | 'pan'>(null)
   const lastMouse = useRef({ x: 0, y: 0 })
   const keys = useRef<Set<string>>(new Set())
   // fly speed scales with scene size; set by fitToBox
   const flySpeed = useRef(1)
+  // orbit target — the point the camera revolves around
+  const orbitTarget = useRef(new THREE.Vector3(0, 0, 0))
 
   // Smooth fly-to animation state
   const flyAnim = useRef<{
@@ -42,13 +41,6 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
     t: number
   } | null>(null)
 
-  // Sync yaw/pitch from the camera's current orientation on first mount
-  useEffect(() => {
-    const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ')
-    yaw.current = euler.y
-    pitch.current = euler.x
-  }, [camera])
-
   useImperativeHandle(ref, () => ({
     fitToBox(box: THREE.Box3) {
       const center = box.getCenter(new THREE.Vector3())
@@ -56,6 +48,7 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
       const span = Math.max(size.x, size.y, size.z)
 
       flySpeed.current = span * 0.5
+      orbitTarget.current.copy(center)
 
       // Position camera outside the box looking at the center
       const toPos = center.clone()
@@ -66,9 +59,6 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
         new THREE.Matrix4().lookAt(toPos, center, new THREE.Vector3(0, 0, 1)),
       )
 
-      // Snap yaw/pitch from destination quaternion
-      const euler = new THREE.Euler().setFromQuaternion(toQuat, 'YXZ')
-
       flyAnim.current = {
         active: true,
         fromPos: camera.position.clone(),
@@ -77,10 +67,6 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
         toQuat,
         t: 0,
       }
-
-      // Pre-aim yaw/pitch so any drag after the animation is smooth
-      yaw.current = euler.y
-      pitch.current = euler.x
     },
   }))
 
@@ -88,7 +74,7 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
     const canvas = gl.domElement
 
     const onMouseDown = (e: MouseEvent) => {
-      if (e.button === 0) drag.current = 'look'
+      if (e.button === 0) drag.current = 'orbit'
       if (e.button === 2) drag.current = 'pan'
       lastMouse.current = { x: e.clientX, y: e.clientY }
       flyAnim.current = null // cancel fly-to on user interaction
@@ -102,20 +88,25 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
       const dy = e.clientY - lastMouse.current.y
       lastMouse.current = { x: e.clientX, y: e.clientY }
 
-      if (drag.current === 'look') {
-        yaw.current -= dx * 0.004
-        pitch.current = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch.current - dy * 0.004))
-        camera.quaternion.setFromEuler(new THREE.Euler(pitch.current, yaw.current, 0, 'YXZ'))
+      if (drag.current === 'orbit') {
+        // Spherical orbit around orbitTarget
+        const offset = camera.position.clone().sub(orbitTarget.current)
+        const spherical = new THREE.Spherical().setFromVector3(offset)
+        spherical.theta -= dx * 0.006
+        spherical.phi = Math.max(0.02, Math.min(Math.PI - 0.02, spherical.phi - dy * 0.006))
+        offset.setFromSpherical(spherical)
+        camera.position.copy(orbitTarget.current).add(offset)
+        camera.lookAt(orbitTarget.current)
       } else {
-        // pan: move camera perpendicular to view direction
-        const right = new THREE.Vector3().crossVectors(
-          new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion),
-          new THREE.Vector3(0, 1, 0),
-        ).normalize()
+        // Pan: shift camera AND orbit target together
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)
+        const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize()
         const up = new THREE.Vector3(0, 1, 0)
         const speed = flySpeed.current * 0.002
-        camera.position.addScaledVector(right, -dx * speed)
-        camera.position.addScaledVector(up, dy * speed)
+        const panOffset = right.clone().multiplyScalar(-dx * speed).addScaledVector(up, dy * speed)
+        camera.position.add(panOffset)
+        orbitTarget.current.add(panOffset)
+        camera.lookAt(orbitTarget.current)
       }
     }
 
@@ -123,8 +114,8 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
       e.preventDefault()
       flyAnim.current = null
       const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)
-      // Move proportionally to flySpeed so it works for all scene scales
       camera.position.addScaledVector(forward, -e.deltaY * flySpeed.current * 0.002)
+      camera.lookAt(orbitTarget.current)
     }
 
     const onKeyDown = (e: KeyboardEvent) => keys.current.add(e.code)
@@ -159,10 +150,10 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
       camera.position.lerpVectors(anim.fromPos, anim.toPos, t)
       camera.quaternion.slerpQuaternions(anim.fromQuat, anim.toQuat, t)
       if (anim.t >= 1) flyAnim.current = null
-      return // don't apply WASD during animation
+      return
     }
 
-    // WASD / QE keyboard movement
+    // WASD / QE keyboard movement (moves camera freely, orbit target stays)
     const k = keys.current
     if (k.size === 0) return
 
