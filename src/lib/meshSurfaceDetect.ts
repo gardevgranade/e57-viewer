@@ -143,9 +143,16 @@ export function detectMeshSurfaces(
 
   if (candidates.length === 0) return []
 
-  // Sort by area descending, take top N
+  // Sort by area descending
   candidates.sort((a, b) => b.area - a.area)
-  const top = candidates.slice(0, numSurfaces)
+
+  // Drop tiny fragments: keep only components ≥ 2% of the largest surface's area.
+  // This removes mesh seams, UV-split slivers, and other micro-patches that would
+  // otherwise pollute the top-N list.
+  const minArea = (candidates[0]?.area ?? 0) * 0.02
+  const significant = candidates.filter(c => c.area >= minArea)
+
+  const top = significant.slice(0, numSurfaces)
 
   const centroidYs = top.map(c => c.centroidY)
   const sorted = [...centroidYs].sort((a, b) => a - b)
