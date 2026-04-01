@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useViewer } from '../../lib/viewerState.js'
 import type { PickedSurface, SurfaceGroup } from '../../lib/viewerState.js'
 import { detectSurfaces } from '../../lib/surfaceDetect.js'
-import { detectMeshSurfaces } from '../../lib/meshSurfaceDetect.js'
+import { detectMeshSurfaces, splitSurfaceTriangles } from '../../lib/meshSurfaceDetect.js'
 import * as THREE from 'three'
 
 function fmtArea(m2: number) {
@@ -26,9 +26,10 @@ interface SurfaceRowProps {
   groups: SurfaceGroup[]
   onUpdate: (id: string, patch: Partial<Pick<PickedSurface, 'label' | 'color' | 'visible' | 'groupId'>>) => void
   onRemove: (id: string) => void
+  onSplit: (id: string) => void
 }
 
-function SurfaceRow({ surf, groups, onUpdate, onRemove }: SurfaceRowProps) {
+function SurfaceRow({ surf, groups, onUpdate, onRemove, onSplit }: SurfaceRowProps) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 4,
@@ -98,6 +99,17 @@ function SurfaceRow({ surf, groups, onUpdate, onRemove }: SurfaceRowProps) {
         {surf.visible ? '👁' : '🙈'}
       </button>
 
+      {/* Split surface */}
+      {surf.worldTriangles && surf.worldTriangles.length >= 18 && (
+        <button
+          onClick={() => onSplit(surf.id)}
+          title="Split into disconnected parts"
+          style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}
+        >
+          ✂️
+        </button>
+      )}
+
       {/* Delete */}
       <button
         onClick={() => onRemove(surf.id)}
@@ -121,7 +133,7 @@ const BTN_BASE: React.CSSProperties = {
 export default function SurfacePanel() {
   const {
     streamStatus, fileType,
-    surfaces, setSurfaces, updateSurface, addSurface: _addSurface, removeSurface,
+    surfaces, setSurfaces, updateSurface, addSurface: _addSurface, removeSurface, replaceSurface,
     surfaceGroups, addGroup, removeGroup, updateGroup,
     setSurfaceColorMode, surfaceColorMode,
     pickSurfaceMode, setPickSurfaceMode,
@@ -205,6 +217,38 @@ export default function SurfacePanel() {
     setSurfaces([])
     setSurfaceColorMode(false)
     if (pickSurfaceMode) setPickSurfaceMode(false)
+  }
+
+  function handleSplit(id: string) {
+    const surf = surfaces.find(s => s.id === id)
+    if (!surf?.worldTriangles) return
+    const parts = splitSurfaceTriangles(surf.worldTriangles)
+    if (parts.length <= 1) return // nothing to split
+    const COLORS = ['#ef4444','#3b82f6','#8b5cf6','#f59e0b','#10b981','#ec4899','#14b8a6','#f97316','#06b6d4','#84cc16']
+    const replacements: PickedSurface[] = parts.map((wt, i) => {
+      const triCount = Math.floor(wt.length / 9)
+      let area = 0
+      for (let t = 0; t < triCount; t++) {
+        const ax = wt[t*9]!, ay = wt[t*9+1]!, az = wt[t*9+2]!
+        const bx = wt[t*9+3]!, by = wt[t*9+4]!, bz = wt[t*9+5]!
+        const cx = wt[t*9+6]!, cy = wt[t*9+7]!, cz = wt[t*9+8]!
+        const e1x=bx-ax,e1y=by-ay,e1z=bz-az,e2x=cx-ax,e2y=cy-ay,e2z=cz-az
+        const nx=e1y*e2z-e1z*e2y, ny=e1z*e2x-e1x*e2z, nz=e1x*e2y-e1y*e2x
+        area += Math.sqrt(nx*nx+ny*ny+nz*nz) / 2
+      }
+      return {
+        id: crypto.randomUUID(),
+        label: `${surf.label} ${i + 1}`,
+        color: COLORS[i % COLORS.length]!,
+        visible: surf.visible,
+        groupId: surf.groupId,
+        area,
+        worldTriangles: wt,
+        pointIndices: [],
+        pointCount: triCount,
+      }
+    })
+    replaceSurface(id, replacements)
   }
 
   function handleAddGroup() {
@@ -351,7 +395,7 @@ export default function SurfacePanel() {
                         {inGroup.length === 0
                           ? <div style={{ color: '#475569', fontSize: 11, textAlign: 'center', padding: '4px 0' }}>No surfaces</div>
                           : inGroup.map(surf => (
-                            <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups} onUpdate={updateSurface} onRemove={removeSurface} />
+                            <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups} onUpdate={updateSurface} onRemove={removeSurface} onSplit={handleSplit} />
                           ))
                         }
                         {inGroup.length > 0 && (
@@ -382,7 +426,7 @@ export default function SurfacePanel() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '3px 4px' }}>
                     {ungroupedSurfaces.map(surf => (
-                      <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups} onUpdate={updateSurface} onRemove={removeSurface} />
+                      <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups} onUpdate={updateSurface} onRemove={removeSurface} onSplit={handleSplit} />
                     ))}
                   </div>
                 </div>

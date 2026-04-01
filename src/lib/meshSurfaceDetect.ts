@@ -47,7 +47,7 @@ function makeUF(n: number) {
  * coarsely tessellated walls don't fragment. The bboxDiag term provides
  * a minimum split distance relative to the cluster's overall extent.
  */
-function spatialComponents(tris: TriData[]): Uint32Array {
+function spatialComponents(tris: TriData[], thresholdOverride?: number): Uint32Array {
   const n = tris.length
   if (n === 1) return new Uint32Array(1)
 
@@ -65,7 +65,7 @@ function spatialComponents(tris: TriData[]): Uint32Array {
   const diag = Math.sqrt((maxX-minX)**2 + (maxY-minY)**2 + (maxZ-minZ)**2)
   // avgEdgeLen ≈ sqrt(avgTriArea) × 1.4  (rough triangle edge estimate)
   const avgEdge = Math.sqrt(totalArea / n) * 1.4
-  const threshold = Math.max(avgEdge * 3, diag * 0.10)
+  const threshold = thresholdOverride ?? Math.max(avgEdge * 3, diag * 0.10)
   const t2 = threshold * threshold
 
   const uf = makeUF(n)
@@ -237,4 +237,63 @@ export function detectMeshSurfaces(
     }
   }
   return results
+}
+
+// ── Split a surface into spatially disconnected components ──────────────────
+
+/**
+ * Attempt to split the worldTriangles of a surface into spatially separate
+ * components using a tighter threshold than the global detect pass.
+ *
+ * thresholdMultiplier: avgEdge multiplier (default 1.5, tighter than global 3)
+ * Returns an array of Float32Array (one per component), or the original if
+ * only one component is found.
+ */
+export function splitSurfaceTriangles(
+  worldTriangles: Float32Array,
+  thresholdMultiplier = 1.5,
+): Float32Array[] {
+  const triCount = Math.floor(worldTriangles.length / 9)
+  if (triCount < 2) return [worldTriangles]
+
+  const tris: TriData[] = []
+  let totalArea = 0
+
+  for (let t = 0; t < triCount; t++) {
+    const ax = worldTriangles[t*9]!, ay = worldTriangles[t*9+1]!, az = worldTriangles[t*9+2]!
+    const bx = worldTriangles[t*9+3]!, by = worldTriangles[t*9+4]!, bz = worldTriangles[t*9+5]!
+    const cx = worldTriangles[t*9+6]!, cy = worldTriangles[t*9+7]!, cz = worldTriangles[t*9+8]!
+    const e1x = bx-ax, e1y = by-ay, e1z = bz-az
+    const e2x = cx-ax, e2y = cy-ay, e2z = cz-az
+    const nrmX = e1y*e2z - e1z*e2y
+    const nrmY = e1z*e2x - e1x*e2z
+    const nrmZ = e1x*e2y - e1y*e2x
+    const area = Math.sqrt(nrmX*nrmX + nrmY*nrmY + nrmZ*nrmZ) / 2
+    totalArea += area
+    tris.push({
+      cx: (ax+bx+cx)/3, cy: (ay+by+cy)/3, cz: (az+bz+cz)/3,
+      area,
+      pos: [ax,ay,az, bx,by,bz, cx,cy,cz],
+    })
+  }
+
+  const avgEdge = Math.sqrt(totalArea / triCount) * 1.4
+  const threshold = avgEdge * thresholdMultiplier
+
+  const assignment = spatialComponents(tris, threshold)
+  let numComponents = 0
+  for (let i = 0; i < assignment.length; i++) {
+    const a = assignment[i]!
+    if (a + 1 > numComponents) numComponents = a + 1
+  }
+
+  if (numComponents <= 1) return [worldTriangles]
+
+  const buckets: number[][] = Array.from({ length: numComponents }, () => [])
+  for (let i = 0; i < tris.length; i++) {
+    buckets[assignment[i]!]!.push(...tris[i]!.pos)
+  }
+  return buckets
+    .filter(b => b.length > 0)
+    .map(b => new Float32Array(b))
 }

@@ -75,6 +75,7 @@ export interface ViewerActions {
   updateSurface: (id: string, patch: Partial<Pick<PickedSurface, 'label' | 'color' | 'visible' | 'groupId'>>) => void
   addSurface: (s: PickedSurface) => void
   removeSurface: (id: string) => void
+  replaceSurface: (id: string, replacements: PickedSurface[]) => void
   addGroup: (g: SurfaceGroup) => void
   removeGroup: (id: string) => void
   updateGroup: (id: string, patch: Partial<Pick<SurfaceGroup, 'label'>>) => void
@@ -202,7 +203,15 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
         })),
       removeSurface: (id) =>
         setState((s) => ({ ...s, surfaces: s.surfaces.filter(surf => surf.id !== id) })),
-      addGroup: (group) =>
+      replaceSurface: (id, replacements) =>
+        setState((s) => {
+          const idx = s.surfaces.findIndex(surf => surf.id === id)
+          if (idx === -1) return s
+          const next = [...s.surfaces]
+          next.splice(idx, 1, ...replacements)
+          return { ...s, surfaces: next }
+        }),
+      addGroup: (group: SurfaceGroup) =>
         setState((s) => ({ ...s, surfaceGroups: [...s.surfaceGroups, group] })),
       removeGroup: (id) =>
         setState((s) => ({
