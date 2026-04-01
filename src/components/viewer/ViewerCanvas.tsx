@@ -12,6 +12,7 @@ import ViewerControls from './ViewerControls.js'
 import FlyCamera, { type FlyCameraHandle } from './FlyCamera.js'
 import SurfacePanel from './SurfacePanel.js'
 import SurfaceMeshOverlay from './SurfaceMeshOverlay.js'
+import SurfacePicker from './SurfacePicker.js'
 
 function SceneGrid() {
   const { bbox } = useViewer()
@@ -69,6 +70,7 @@ export default function ViewerCanvas() {
           <SceneGrid />
           <SurfaceMeshOverlay />
           <MeasureTool flyCameraRef={flyCameraRef} />
+          <SurfacePicker flyCameraRef={flyCameraRef} />
         </Suspense>
 
         <FlyCamera ref={flyCameraRef} />

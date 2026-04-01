@@ -176,6 +176,7 @@ export default function PointCloud({ flyCameraRef }: PointCloudProps) {
     const override = new Float32Array(count * 3).fill(0.12)
     for (const surf of surfaces) {
       if (!surf.visible) continue
+      if (!surf.pointIndices) continue
       const [r, g, b] = hexToRgb01(surf.color)
       for (const idx of surf.pointIndices) {
         if (idx < count) {

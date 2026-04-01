@@ -1,11 +1,27 @@
 import { createContext, useContext, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { BoundingBox } from '../lib/jobStore.js'
-import type { DetectedSurface } from './surfaceDetect.js'
 
 export type StreamStatus = 'idle' | 'uploading' | 'streaming' | 'done' | 'error'
 export type ColorMode = 'rgb' | 'intensity' | 'height'
 export type Quaternion4 = [number, number, number, number]
+
+export interface PickedSurface {
+  id: string
+  label: string
+  color: string
+  visible: boolean
+  groupId: string | null
+  area?: number
+  worldTriangles?: Float32Array
+  pointIndices?: number[]
+  pointCount?: number
+}
+
+export interface SurfaceGroup {
+  id: string
+  label: string
+}
 
 export interface ViewerState {
   jobId: string | null
@@ -28,8 +44,10 @@ export interface ViewerState {
   fileType: string | null
   /** Whether the measurement tool is active */
   measureActive: boolean
-  surfaces: DetectedSurface[]
+  surfaces: PickedSurface[]
+  surfaceGroups: SurfaceGroup[]
   surfaceColorMode: boolean
+  pickSurfaceMode: boolean
 }
 
 export interface ViewerActions {
@@ -53,9 +71,15 @@ export interface ViewerActions {
   resetObjectRotation: () => void
   setFileType: (fileType: string | null) => void
   setMeasureActive: (active: boolean) => void
-  setSurfaces: (s: DetectedSurface[]) => void
-  updateSurface: (id: string, patch: Partial<Pick<DetectedSurface, 'color' | 'visible' | 'label'>>) => void
+  setSurfaces: (s: PickedSurface[]) => void
+  updateSurface: (id: string, patch: Partial<Pick<PickedSurface, 'label' | 'color' | 'visible' | 'groupId'>>) => void
+  addSurface: (s: PickedSurface) => void
+  removeSurface: (id: string) => void
+  addGroup: (g: SurfaceGroup) => void
+  removeGroup: (id: string) => void
+  updateGroup: (id: string, patch: Partial<Pick<SurfaceGroup, 'label'>>) => void
   setSurfaceColorMode: (v: boolean) => void
+  setPickSurfaceMode: (v: boolean) => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
     matrixWorld: THREE.Matrix4
@@ -105,7 +129,9 @@ const initialState: ViewerState = {
   fileType: null,
   measureActive: false,
   surfaces: [],
+  surfaceGroups: [],
   surfaceColorMode: false,
+  pickSurfaceMode: false,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -168,7 +194,31 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
           ...s,
           surfaces: s.surfaces.map(surf => surf.id === id ? { ...surf, ...patch } : surf),
         })),
+      addSurface: (surface) =>
+        setState((s) => ({
+          ...s,
+          surfaces: [...s.surfaces, surface],
+          surfaceColorMode: true,
+        })),
+      removeSurface: (id) =>
+        setState((s) => ({ ...s, surfaces: s.surfaces.filter(surf => surf.id !== id) })),
+      addGroup: (group) =>
+        setState((s) => ({ ...s, surfaceGroups: [...s.surfaceGroups, group] })),
+      removeGroup: (id) =>
+        setState((s) => ({
+          ...s,
+          surfaceGroups: s.surfaceGroups.filter(g => g.id !== id),
+          surfaces: s.surfaces.map(surf =>
+            surf.groupId === id ? { ...surf, groupId: null } : surf,
+          ),
+        })),
+      updateGroup: (id, patch) =>
+        setState((s) => ({
+          ...s,
+          surfaceGroups: s.surfaceGroups.map(g => g.id === id ? { ...g, ...patch } : g),
+        })),
       setSurfaceColorMode: (surfaceColorMode) => setState((s) => ({ ...s, surfaceColorMode })),
+      setPickSurfaceMode: (pickSurfaceMode) => setState((s) => ({ ...s, pickSurfaceMode })),
     }),
     [],
   )
