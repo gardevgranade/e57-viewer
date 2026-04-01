@@ -50,13 +50,15 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
       flySpeed.current = span * 0.5
       orbitTarget.current.copy(center)
 
-      // Position camera outside the box looking at the center
-      const toPos = center.clone()
-      toPos.y -= span * 1.2
-      toPos.z += span * 0.5
+      // Y-up: position camera at a 3/4 angle — in front, to the right, and above
+      const toPos = new THREE.Vector3(
+        center.x + span * 0.8,
+        center.y + span * 0.6,
+        center.z + span * 1.2,
+      )
 
       const toQuat = new THREE.Quaternion().setFromRotationMatrix(
-        new THREE.Matrix4().lookAt(toPos, center, new THREE.Vector3(0, 0, 1)),
+        new THREE.Matrix4().lookAt(toPos, center, new THREE.Vector3(0, 1, 0)),
       )
 
       flyAnim.current = {
@@ -69,6 +71,11 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
       }
     },
   }))
+
+  // Point the camera at the grid origin on mount
+  useEffect(() => {
+    camera.lookAt(0, 0, 0)
+  }, [camera])
 
   useEffect(() => {
     const canvas = gl.domElement
