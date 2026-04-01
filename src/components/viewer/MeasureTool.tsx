@@ -31,6 +31,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const { measureActive, bbox } = useViewer()
   const { camera, gl, scene } = useThree()
   const [points, setPoints] = useState<MeasurePoint[]>([])
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
 
   // Tell FlyCamera not to orbit on left-click while measure is active
   useEffect(() => {
@@ -99,9 +100,15 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     <>
       {/* Dots at each picked point */}
       {points.map((p, i) => (
-        <mesh key={i} position={[p.x, p.y, p.z]} renderOrder={999}>
+        <mesh
+          key={i}
+          position={[p.x, p.y, p.z]}
+          renderOrder={999}
+          onPointerEnter={(e) => { e.stopPropagation(); setHoveredIdx(i) }}
+          onPointerLeave={() => setHoveredIdx(null)}
+        >
           <sphereGeometry args={[dotRadius, 10, 10]} />
-          <meshBasicMaterial color="#f97316" depthTest={false} />
+          <meshBasicMaterial color={hoveredIdx === i ? '#fb923c' : '#f97316'} depthTest={false} />
         </mesh>
       ))}
 
@@ -115,8 +122,9 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
         />
       )}
 
-      {/* Per-segment distance labels */}
+      {/* Per-segment distance labels — only when hovering either endpoint */}
       {points.slice(0, -1).map((p, i) => {
+        if (hoveredIdx !== i && hoveredIdx !== i + 1) return null
         const q = points[i + 1]
         const d = dist3(p, q)
         const dh = Math.sqrt((q.x - p.x) ** 2 + (q.z - p.z) ** 2)
@@ -147,8 +155,8 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
         )
       })}
 
-      {/* Total label after 2+ segments */}
-      {points.length >= 3 && (() => {
+      {/* Total label — only when hovering the last point */}
+      {points.length >= 3 && hoveredIdx === points.length - 1 && (() => {
         const last = points[points.length - 1]
         return (
           <Html
