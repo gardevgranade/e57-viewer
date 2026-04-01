@@ -129,7 +129,6 @@ export default function SurfacePanel() {
   } = useViewer()
 
   const [detecting, setDetecting] = useState(false)
-  const [numSurfaces, setNumSurfaces] = useState(6)
   const [open, setOpen] = useState(true)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
@@ -166,7 +165,7 @@ export default function SurfacePanel() {
         worldPos[i * 3 + 1] = v.y
         worldPos[i * 3 + 2] = v.z
       }
-      const detected = detectSurfaces(worldPos, count, numSurfaces)
+      const detected = detectSurfaces(worldPos, count)
       const picked: PickedSurface[] = detected.map(d => ({
         id: d.id,
         label: d.label,
@@ -190,7 +189,7 @@ export default function SurfacePanel() {
     setDetecting(true)
     await new Promise(r => setTimeout(r, 30))
     try {
-      const detected = detectMeshSurfaces(obj, numSurfaces)
+      const detected = detectMeshSurfaces(obj)
       const picked: PickedSurface[] = detected.map(d => ({
         id: d.id, label: d.label, color: d.color, visible: d.visible,
         groupId: null, area: d.area, worldTriangles: d.worldTriangles,
@@ -259,67 +258,38 @@ export default function SurfacePanel() {
               )}
 
               {/* Auto-detect row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ display: 'flex', gap: 3 }}>
-                  {[3, 5, 8, 10].map(n => (
-                    <button key={n} onClick={() => setNumSurfaces(n)} style={{
-                      background: numSurfaces === n ? '#334155' : 'transparent',
-                      border: '1px solid #334155',
-                      color: numSurfaces === n ? '#e2e8f0' : '#64748b',
-                      borderRadius: 4, padding: '1px 6px', cursor: 'pointer', fontSize: 11,
-                    }}>{n}</button>
-                  ))}
-                </div>
-                <button
-                  onClick={handleMeshDetect}
-                  disabled={detecting}
-                  style={{
-                    flex: 1, padding: '4px 0',
-                    background: detecting ? '#1e293b' : '#0f4c75',
-                    border: `1px solid ${detecting ? '#334155' : '#1a6fa8'}`,
-                    borderRadius: 5, color: detecting ? '#64748b' : '#7dd3fc',
-                    fontWeight: 600, cursor: detecting ? 'not-allowed' : 'pointer', fontSize: 11,
-                  }}
-                >
-                  {detecting ? '⏳…' : '🔍 Auto-Detect'}
-                </button>
-              </div>
+              <button
+                onClick={handleMeshDetect}
+                disabled={detecting}
+                style={{
+                  width: '100%', padding: '4px 0',
+                  background: detecting ? '#1e293b' : '#0f4c75',
+                  border: `1px solid ${detecting ? '#334155' : '#1a6fa8'}`,
+                  borderRadius: 5, color: detecting ? '#64748b' : '#7dd3fc',
+                  fontWeight: 600, cursor: detecting ? 'not-allowed' : 'pointer', fontSize: 11,
+                }}
+              >
+                {detecting ? '⏳…' : '🔍 Auto-Detect All'}
+              </button>
             </div>
           )}
 
           {/* ── E57: detect button ── */}
           {!isMesh && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <span style={{ color: '#94a3b8' }}>Count:</span>
-                {[3, 5, 8, 10].map(n => (
-                  <button
-                    key={n}
-                    onClick={() => setNumSurfaces(n)}
-                    style={{
-                      background: numSurfaces === n ? '#334155' : 'transparent',
-                      border: '1px solid #334155',
-                      color: numSurfaces === n ? '#e2e8f0' : '#64748b',
-                      borderRadius: 4, padding: '1px 6px', cursor: 'pointer', fontSize: 11,
-                    }}
-                  >{n}</button>
-                ))}
-              </div>
-              <button
-                onClick={handleDetect}
-                disabled={detecting}
-                style={{
-                  width: '100%', padding: '6px 0',
-                  background: detecting ? '#1e293b' : '#1d4ed8',
-                  border: 'none', borderRadius: 6,
-                  color: detecting ? '#64748b' : '#fff',
-                  fontWeight: 600, cursor: detecting ? 'not-allowed' : 'pointer',
-                  fontSize: 12, marginBottom: 8,
-                }}
-              >
-                {detecting ? '⏳ Analyzing…' : '🔍 Detect Surfaces'}
-              </button>
-            </>
+            <button
+              onClick={handleDetect}
+              disabled={detecting}
+              style={{
+                width: '100%', padding: '6px 0',
+                background: detecting ? '#1e293b' : '#1d4ed8',
+                border: 'none', borderRadius: 6,
+                color: detecting ? '#64748b' : '#fff',
+                fontWeight: 600, cursor: detecting ? 'not-allowed' : 'pointer',
+                fontSize: 12, marginBottom: 8,
+              }}
+            >
+              {detecting ? '⏳ Analyzing…' : '🔍 Detect All Surfaces'}
+            </button>
           )}
 
           {/* ── Surface list ── */}

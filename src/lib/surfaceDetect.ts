@@ -21,7 +21,6 @@ const SURFACE_COLORS = [
 export function detectSurfaces(
   worldPos: Float32Array,
   count: number,
-  numSurfaces: number,
 ): DetectedSurface[] {
   if (count < 3) return []
 
@@ -52,7 +51,7 @@ export function detectSurfaces(
 
   const foundPlanes: PlaneResult[] = []
 
-  for (let p = 0; p < numSurfaces; p++) {
+  for (;;) {
     if (pool.length < 15) break
 
     let bestPlane: PlaneResult | null = null

@@ -104,7 +104,6 @@ function spatialComponents(tris: TriData[]): Uint32Array {
 
 export function detectMeshSurfaces(
   root: THREE.Object3D,
-  numSurfaces: number,
 ): DetectedSurface[] {
   const normalClusters: NormalCluster[] = []
 
@@ -205,7 +204,7 @@ export function detectMeshSurfaces(
 
   // Drop fragments smaller than 1% of the largest surface
   const minArea = candidates[0]!.totalArea * 0.01
-  const top = candidates.filter(c => c.totalArea >= minArea).slice(0, numSurfaces)
+  const top = candidates.filter(c => c.totalArea >= minArea)
 
   const centroidYs = top.map(c => c.centroidY)
   const medianY = [...centroidYs].sort((a,b)=>a-b)[Math.floor(centroidYs.length/2)] ?? 0
