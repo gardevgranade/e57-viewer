@@ -1,10 +1,10 @@
 import { useEffect, useRef, useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import type { CameraControlsImpl } from '@react-three/drei'
 import { decodeChunk } from '../../lib/chunkCodec.js'
 import { useViewer } from '../../lib/viewerState.js'
 import type { ColorMode } from '../../lib/viewerState.js'
+import type { FlyCameraHandle } from './FlyCamera.js'
 
 const INITIAL_CAPACITY = 500_000
 const GROWTH_FACTOR = 1.5
@@ -31,17 +31,16 @@ function growBuffers(buf: Buffers, needed: number): Buffers {
   return { positions, colors, intensities, count: buf.count, capacity: newCapacity }
 }
 
-export default function PointCloud() {
+interface PointCloudProps {
+  flyCameraRef: React.RefObject<FlyCameraHandle | null>
+}
+
+export default function PointCloud({ flyCameraRef }: PointCloudProps) {
   const { jobId, streamStatus, pointSize, colorMode, addLoadedPoints, setDone, setError } =
     useViewer()
 
   const pointsRef = useRef<THREE.Points>(null!)
-  const { camera, controls } = useThree()
-  // Keep controls in a ref so the streaming effect can read it without
-  // adding it to deps (controls changes from null→instance when OrbitControls
-  // mounts, which would restart the streaming effect and kill the connection).
-  const controlsRef = useRef(controls)
-  controlsRef.current = controls
+  const { camera } = useThree()
 
   const buffersRef = useRef<Buffers>({
     positions: new Float32Array(INITIAL_CAPACITY * 3),
@@ -272,18 +271,16 @@ export default function PointCloud() {
           hasIntensity: msg.hasIntensity,
         })
         es.close()
-        // Smoothly fit the camera to the bounding box using CameraControls
+        // Fly camera to fit the bounding box
         if (msg.bbox) {
           const { minX, minY, minZ: bMinZ, maxX, maxY, maxZ: bMaxZ } = msg.bbox
           const box = new THREE.Box3(
             new THREE.Vector3(minX, minY, bMinZ),
             new THREE.Vector3(maxX, maxY, bMaxZ),
           )
-          const cc = controlsRef.current as CameraControlsImpl | null
-          if (cc?.fitToBox) {
-            cc.fitToBox(box, true, { paddingTop: 0.2, paddingBottom: 0.2, paddingLeft: 0.2, paddingRight: 0.2 })
+          if (flyCameraRef.current) {
+            flyCameraRef.current.fitToBox(box)
           } else {
-            // fallback when CameraControls isn't mounted yet
             const center = box.getCenter(new THREE.Vector3())
             const size = box.getSize(new THREE.Vector3())
             const span = Math.max(size.x, size.y, size.z)

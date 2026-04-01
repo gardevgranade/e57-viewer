@@ -1,16 +1,18 @@
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { CameraControls, GizmoHelper, GizmoViewport } from '@react-three/drei'
+import { GizmoHelper, GizmoViewport } from '@react-three/drei'
 import { useViewer } from '../../lib/viewerState.js'
 import PointCloud from './PointCloud.js'
 import MeshOverlay from './MeshOverlay.js'
 import ViewerControls from './ViewerControls.js'
+import FlyCamera, { type FlyCameraHandle } from './FlyCamera.js'
 
 export default function ViewerCanvas() {
   const { streamStatus } = useViewer()
   const isActive = streamStatus === 'streaming' || streamStatus === 'done'
+  const flyCameraRef = useRef<FlyCameraHandle>(null)
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-2xl bg-[#0d1117]">
@@ -29,23 +31,11 @@ export default function ViewerCanvas() {
         <directionalLight position={[10, 10, 5]} intensity={0.8} />
 
         <Suspense fallback={null}>
-          <PointCloud />
+          <PointCloud flyCameraRef={flyCameraRef} />
           <MeshOverlay />
         </Suspense>
 
-        <CameraControls
-          makeDefault
-          smoothTime={0.15}
-          draggingSmoothTime={0}
-          minDistance={0.001}
-          maxDistance={50_000}
-          mouseButtons={{
-            left: 1,   // rotate
-            middle: 8, // dolly
-            right: 2,  // truck (pan)
-            wheel: 8,  // dolly
-          }}
-        />
+        <FlyCamera ref={flyCameraRef} />
 
         <GizmoHelper alignment="top-right" margin={[60, 60]}>
           <GizmoViewport
