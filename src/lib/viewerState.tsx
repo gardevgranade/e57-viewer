@@ -24,6 +24,8 @@ export interface ViewerState {
   objectQuaternion: Quaternion4
   /** File type of the loaded model */
   fileType: string | null
+  /** Whether the measurement tool is active */
+  measureActive: boolean
 }
 
 export interface ViewerActions {
@@ -46,6 +48,7 @@ export interface ViewerActions {
   applyObjectRotation: (axis: 'x' | 'y' | 'z', angleDeg: number) => void
   resetObjectRotation: () => void
   setFileType: (fileType: string | null) => void
+  setMeasureActive: (active: boolean) => void
 }
 
 const IDENTITY_QUAT: Quaternion4 = [0, 0, 0, 1]
@@ -87,6 +90,7 @@ const initialState: ViewerState = {
   showMesh: false,
   objectQuaternion: IDENTITY_QUAT,
   fileType: null,
+  measureActive: false,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -133,6 +137,7 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
         })),
       resetObjectRotation: () => setState((s) => ({ ...s, objectQuaternion: IDENTITY_QUAT })),
       setFileType: (fileType) => setState((s) => ({ ...s, fileType })),
+      setMeasureActive: (measureActive) => setState((s) => ({ ...s, measureActive })),
     }),
     [],
   )

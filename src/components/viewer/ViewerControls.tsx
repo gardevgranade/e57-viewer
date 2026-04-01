@@ -11,9 +11,11 @@ export default function ViewerControls() {
     colorMode,
     showMesh,
     fileType,
+    measureActive,
     setPointSize,
     setColorMode,
     setShowMesh,
+    setMeasureActive,
     errorMessage,
     applyObjectRotation,
     resetObjectRotation,
@@ -174,6 +176,33 @@ export default function ViewerControls() {
           )}
             </>
           )}
+
+          {/* Measure tool — available once something is loaded */}
+          {isDone && (
+            <>
+              <div className="h-4 w-px bg-white/10" />
+              <button
+                onClick={() => setMeasureActive(!measureActive)}
+                className={[
+                  'rounded-md px-3 py-1 text-xs font-medium transition flex items-center gap-1.5',
+                  measureActive
+                    ? 'bg-orange-500/30 text-orange-300 hover:bg-orange-500/20'
+                    : 'bg-white/10 text-white/70 hover:bg-white/20',
+                ].join(' ')}
+                title="Measure distances by clicking points in the scene"
+              >
+                <RulerIcon className="h-3 w-3" />
+                {measureActive ? 'Measuring' : 'Measure'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Measure hint bar */}
+      {measureActive && (
+        <div className="pointer-events-none rounded-xl border border-orange-500/20 bg-orange-500/10 px-4 py-2 text-xs text-orange-300 backdrop-blur-sm text-center">
+          Click anywhere on the model to place measurement points · <span className="opacity-60">Esc to clear</span>
         </div>
       )}
     </div>
@@ -185,6 +214,14 @@ function axisColor(axis: 'x' | 'y' | 'z') {
   if (axis === 'x') return 'text-red-400'
   if (axis === 'y') return 'text-green-400'
   return 'text-blue-400'
+}
+
+function RulerIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.3 8.7L8.7 21.3a2.4 2.4 0 01-3.4 0L2.7 18.7a2.4 2.4 0 010-3.4L15.3 2.7a2.4 2.4 0 013.4 0l2.6 2.6a2.4 2.4 0 010 3.4z"/>
+      <path d="M7.5 10.5l2 2M10.5 7.5l2 2M13.5 4.5l2 2"/></svg>
+  )
 }
 
 function SpinnerIcon({ className }: { className?: string }) {

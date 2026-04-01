@@ -7,6 +7,8 @@ import * as THREE from 'three'
 export interface FlyCameraHandle {
   /** Animate the camera to view the given box from outside it. */
   fitToBox: (box: THREE.Box3) => void
+  /** Suppress left-drag orbit when the measurement tool is active. */
+  setMeasureMode: (enabled: boolean) => void
 }
 
 /**
@@ -26,10 +28,9 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
   const drag = useRef<null | 'orbit' | 'pan'>(null)
   const lastMouse = useRef({ x: 0, y: 0 })
   const keys = useRef<Set<string>>(new Set())
-  // fly speed scales with scene size; set by fitToBox
   const flySpeed = useRef(1)
-  // orbit target — the point the camera revolves around
   const orbitTarget = useRef(new THREE.Vector3(0, 0, 0))
+  const measureMode = useRef(false)
 
   // Smooth fly-to animation state
   const flyAnim = useRef<{
@@ -50,7 +51,6 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
       flySpeed.current = span * 0.5
       orbitTarget.current.copy(center)
 
-      // Y-up: position camera at a 3/4 angle — in front, to the right, and above
       const toPos = new THREE.Vector3(
         center.x + span * 0.8,
         center.y + span * 0.6,
@@ -70,6 +70,9 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
         t: 0,
       }
     },
+    setMeasureMode(enabled: boolean) {
+      measureMode.current = enabled
+    },
   }))
 
   // Point the camera at the grid origin on mount
@@ -81,10 +84,12 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
     const canvas = gl.domElement
 
     const onMouseDown = (e: MouseEvent) => {
+      // In measure mode left-click is handled by MeasureTool, not orbit
+      if (e.button === 0 && measureMode.current) return
       if (e.button === 0) drag.current = 'orbit'
       if (e.button === 2) drag.current = 'pan'
       lastMouse.current = { x: e.clientX, y: e.clientY }
-      flyAnim.current = null // cancel fly-to on user interaction
+      flyAnim.current = null
     }
 
     const onMouseUp = () => { drag.current = null }

@@ -7,6 +7,7 @@ import { useViewer } from '../../lib/viewerState.js'
 import PointCloud from './PointCloud.js'
 import MeshOverlay from './MeshOverlay.js'
 import MeshModel from './MeshModel.js'
+import MeasureTool from './MeasureTool.js'
 import ViewerControls from './ViewerControls.js'
 import FlyCamera, { type FlyCameraHandle } from './FlyCamera.js'
 
@@ -63,8 +64,8 @@ export default function ViewerCanvas() {
               <MeshOverlay />
             </>
           )}
-          {/* Grid always visible — gives spatial reference before and after loading */}
           <SceneGrid />
+          <MeasureTool flyCameraRef={flyCameraRef} />
         </Suspense>
 
         <FlyCamera ref={flyCameraRef} />
