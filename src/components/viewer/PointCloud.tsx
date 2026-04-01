@@ -1,0 +1,327 @@
+import { useEffect, useRef, useMemo } from 'react'
+import { useThree } from '@react-three/fiber'
+import * as THREE from 'three'
+import { decodeChunk } from '../../lib/chunkCodec.js'
+import { useViewer } from '../../lib/viewerState.js'
+import type { ColorMode } from '../../lib/viewerState.js'
+
+const INITIAL_CAPACITY = 500_000
+const GROWTH_FACTOR = 1.5
+
+interface Buffers {
+  positions: Float32Array
+  colors: Float32Array
+  intensities: Float32Array
+  count: number
+  capacity: number
+}
+
+function growBuffers(buf: Buffers, needed: number): Buffers {
+  if (buf.count + needed <= buf.capacity) return buf
+  const newCapacity = Math.ceil(
+    Math.max(buf.capacity * GROWTH_FACTOR, buf.count + needed),
+  )
+  const positions = new Float32Array(newCapacity * 3)
+  const colors = new Float32Array(newCapacity * 3)
+  const intensities = new Float32Array(newCapacity)
+  positions.set(buf.positions.subarray(0, buf.count * 3))
+  colors.set(buf.colors.subarray(0, buf.count * 3))
+  intensities.set(buf.intensities.subarray(0, buf.count))
+  return { positions, colors, intensities, count: buf.count, capacity: newCapacity }
+}
+
+export default function PointCloud() {
+  const { jobId, streamStatus, pointSize, colorMode, addLoadedPoints, setDone, setError } =
+    useViewer()
+
+  const pointsRef = useRef<THREE.Points>(null!)
+  const { camera, controls } = useThree()
+  // Keep controls in a ref so the streaming effect can read it without
+  // adding it to deps (controls changes from null→instance when OrbitControls
+  // mounts, which would restart the streaming effect and kill the connection).
+  const controlsRef = useRef(controls)
+  controlsRef.current = controls
+
+  const buffersRef = useRef<Buffers>({
+    positions: new Float32Array(INITIAL_CAPACITY * 3),
+    colors: new Float32Array(INITIAL_CAPACITY * 3),
+    intensities: new Float32Array(INITIAL_CAPACITY),
+    count: 0,
+    capacity: INITIAL_CAPACITY,
+  })
+
+  // Initialize geometry
+  const geometry = useMemo(() => {
+    const geo = new THREE.BufferGeometry()
+    const cap = INITIAL_CAPACITY
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cap * 3), 3))
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cap * 3), 3))
+    geo.setAttribute('intensity', new THREE.BufferAttribute(new Float32Array(cap), 1))
+    geo.setDrawRange(0, 0)
+    return geo
+  }, [])
+
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uPointSize: { value: pointSize },
+          uColorMode: { value: colorModeToInt(colorMode) },
+          uMinZ: { value: 0 },
+          uMaxZ: { value: 1 },
+        },
+        vertexShader: `
+          attribute float intensity;
+          uniform float uPointSize;
+          uniform int uColorMode;
+          uniform float uMinZ;
+          uniform float uMaxZ;
+          varying vec3 vColor;
+          varying float vIntensity;
+
+          vec3 heatmap(float t) {
+            t = clamp(t, 0.0, 1.0);
+            return vec3(
+              smoothstep(0.5, 0.75, t),
+              smoothstep(0.0, 0.5, t) - smoothstep(0.75, 1.0, t),
+              1.0 - smoothstep(0.0, 0.5, t)
+            );
+          }
+
+          void main() {
+            vIntensity = intensity;
+            if (uColorMode == 0) {
+              // RGB from attribute
+              vColor = color;
+            } else if (uColorMode == 1) {
+              // Intensity
+              vColor = heatmap(intensity);
+            } else {
+              // Height (Z)
+              float t = clamp((position.z - uMinZ) / max(uMaxZ - uMinZ, 0.001), 0.0, 1.0);
+              vColor = heatmap(t);
+            }
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = uPointSize;
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vColor;
+          void main() {
+            // Circular point
+            vec2 coord = gl_PointCoord - 0.5;
+            if (length(coord) > 0.5) discard;
+            gl_FragColor = vec4(vColor, 1.0);
+          }
+        `,
+        vertexColors: true,
+      }),
+    [], // intentionally static; we update uniforms directly
+  )
+
+  // Update uniforms when settings change
+  useEffect(() => {
+    if (material.uniforms.uPointSize) {
+      material.uniforms.uPointSize.value = pointSize
+    }
+  }, [pointSize, material])
+
+  useEffect(() => {
+    if (material.uniforms.uColorMode) {
+      material.uniforms.uColorMode.value = colorModeToInt(colorMode)
+    }
+  }, [colorMode, material])
+
+  // Stream handler
+  useEffect(() => {
+    if (!jobId || streamStatus !== 'streaming') return
+
+    console.debug('[PointCloud] Starting stream for job', jobId)
+
+    // Reset buffers
+    buffersRef.current = {
+      positions: new Float32Array(INITIAL_CAPACITY * 3),
+      colors: new Float32Array(INITIAL_CAPACITY * 3),
+      intensities: new Float32Array(INITIAL_CAPACITY),
+      count: 0,
+      capacity: INITIAL_CAPACITY,
+    }
+    geometry.setDrawRange(0, 0)
+
+    const es = new EventSource(`/api/stream/${jobId}`)
+
+    console.debug('[PointCloud] EventSource created', es.url)
+
+    // Log readyState every 2s so the user can see if it's stuck in CONNECTING
+    const readyStates = ['CONNECTING', 'OPEN', 'CLOSED']
+    const readyStateTimer = setInterval(() => {
+      console.debug(`[PointCloud] EventSource readyState: ${readyStates[es.readyState]} (${es.readyState})`)
+    }, 2000)
+
+    let minZ = Infinity
+    let maxZ = -Infinity
+    let chunkCount = 0
+
+    es.onopen = () => {
+      console.debug('[PointCloud] Stream connection opened')
+    }
+
+    es.onmessage = (event) => {
+      const msg = JSON.parse(event.data as string)
+
+      if (msg.type === 'chunk') {
+        chunkCount++
+        if (chunkCount === 1) {
+          console.debug('[PointCloud] First chunk received', {
+            pointCount: msg.pointCount,
+            hasColor: msg.hasColor,
+            hasIntensity: msg.hasIntensity,
+          })
+        } else if (chunkCount % 10 === 0) {
+          console.debug(`[PointCloud] Chunk #${chunkCount}, total pts so far:`, buffersRef.current.count)
+        }
+        const chunk = decodeChunk(msg.base64 as string)
+        const stride = 3 + (chunk.hasColor ? 3 : 0) + (chunk.hasIntensity ? 1 : 0)
+
+        let buf = buffersRef.current
+        buf = growBuffers(buf, chunk.pointCount)
+        buffersRef.current = buf
+
+        const base = buf.count
+
+        for (let i = 0; i < chunk.pointCount; i++) {
+          const srcBase = i * stride
+          const x = chunk.data[srcBase]!
+          const y = chunk.data[srcBase + 1]!
+          const z = chunk.data[srcBase + 2]!
+
+          buf.positions[(base + i) * 3] = x
+          buf.positions[(base + i) * 3 + 1] = y
+          buf.positions[(base + i) * 3 + 2] = z
+
+          if (z < minZ) minZ = z
+          if (z > maxZ) maxZ = z
+
+          if (chunk.hasColor) {
+            buf.colors[(base + i) * 3] = chunk.data[srcBase + 3]!
+            buf.colors[(base + i) * 3 + 1] = chunk.data[srcBase + 4]!
+            buf.colors[(base + i) * 3 + 2] = chunk.data[srcBase + 5]!
+          } else {
+            buf.colors[(base + i) * 3] = 0.8
+            buf.colors[(base + i) * 3 + 1] = 0.8
+            buf.colors[(base + i) * 3 + 2] = 0.8
+          }
+
+          if (chunk.hasIntensity) {
+            const iOffset = srcBase + 3 + (chunk.hasColor ? 3 : 0)
+            buf.intensities[base + i] = chunk.data[iOffset]!
+          }
+        }
+
+        buf.count += chunk.pointCount
+
+        // Push to GPU
+        const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute
+        const colAttr = geometry.getAttribute('color') as THREE.BufferAttribute
+        const intAttr = geometry.getAttribute('intensity') as THREE.BufferAttribute
+
+        // Resize GPU buffer if needed
+        if (buf.capacity > posAttr.array.length / 3) {
+          geometry.setAttribute(
+            'position',
+            new THREE.BufferAttribute(buf.positions.slice(0, buf.capacity * 3), 3),
+          )
+          geometry.setAttribute(
+            'color',
+            new THREE.BufferAttribute(buf.colors.slice(0, buf.capacity * 3), 3),
+          )
+          geometry.setAttribute(
+            'intensity',
+            new THREE.BufferAttribute(buf.intensities.slice(0, buf.capacity), 1),
+          )
+        } else {
+          const posArr = posAttr.array as Float32Array
+          posArr.set(buf.positions.subarray(base * 3, buf.count * 3), base * 3)
+          posAttr.addUpdateRange(base * 3, chunk.pointCount * 3)
+          posAttr.needsUpdate = true
+
+          const colArr = colAttr.array as Float32Array
+          colArr.set(buf.colors.subarray(base * 3, buf.count * 3), base * 3)
+          colAttr.addUpdateRange(base * 3, chunk.pointCount * 3)
+          colAttr.needsUpdate = true
+
+          const intArr = intAttr.array as Float32Array
+          intArr.set(buf.intensities.subarray(base, buf.count), base)
+          intAttr.addUpdateRange(base, chunk.pointCount)
+          intAttr.needsUpdate = true
+        }
+
+        geometry.setDrawRange(0, buf.count)
+
+        // Update Z range uniform
+        if (material.uniforms.uMinZ) material.uniforms.uMinZ.value = minZ
+        if (material.uniforms.uMaxZ) material.uniforms.uMaxZ.value = maxZ
+
+        addLoadedPoints(chunk.pointCount)
+      } else if (msg.type === 'done') {
+        console.debug('[PointCloud] Stream done', {
+          totalPoints: msg.totalPoints,
+          bbox: msg.bbox,
+          hasColor: msg.hasColor,
+          hasIntensity: msg.hasIntensity,
+        })
+        es.close()
+        // Center camera on bounding box
+        if (msg.bbox) {
+          const { minX, minY, minZ: bMinZ, maxX, maxY, maxZ: bMaxZ } = msg.bbox
+          const cx = (minX + maxX) / 2
+          const cy = (minY + maxY) / 2
+          const cz = (bMinZ + bMaxZ) / 2
+          const span = Math.max(maxX - minX, maxY - minY, bMaxZ - bMinZ)
+          camera.position.set(cx, cy - span * 1.5, cz + span * 0.5)
+          // Update OrbitControls target so it keeps looking at the data center
+          // (without this, OrbitControls resets lookAt to origin on the next frame)
+          const orbitControls = controlsRef.current as any
+          if (orbitControls?.target) {
+            orbitControls.target.set(cx, cy, cz)
+            orbitControls.update()
+          } else {
+            camera.lookAt(cx, cy, cz)
+          }
+        }
+        setDone({
+          totalPoints: msg.totalPoints,
+          bbox: msg.bbox,
+          hasColor: msg.hasColor,
+          hasIntensity: msg.hasIntensity,
+        })
+      } else if (msg.type === 'error') {
+        console.error('[PointCloud] Stream error:', msg.message)
+        es.close()
+        setError(msg.message as string)
+      }
+    }
+
+    es.onerror = (e) => {
+      console.error('[PointCloud] EventSource connection error', e)
+      es.close()
+      setError('Stream connection lost')
+    }
+
+    return () => {
+      console.debug('[PointCloud] Cleaning up stream for job', jobId)
+      clearInterval(readyStateTimer)
+      es.close()
+    }
+  }, [jobId, streamStatus, geometry, material, camera, addLoadedPoints, setDone, setError])
+
+  return (
+    <points ref={pointsRef} geometry={geometry} material={material} />
+  )
+}
+
+function colorModeToInt(mode: ColorMode): number {
+  if (mode === 'rgb') return 0
+  if (mode === 'intensity') return 1
+  return 2 // height
+}
