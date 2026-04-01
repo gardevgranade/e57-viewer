@@ -3,41 +3,54 @@
 import { useState } from 'react'
 import { useViewer } from '../../lib/viewerState.js'
 import { detectSurfaces } from '../../lib/surfaceDetect.js'
+import { detectMeshSurfaces } from '../../lib/meshSurfaceDetect.js'
 import * as THREE from 'three'
+
+function fmtArea(m2: number) {
+  if (m2 < 0.01) return `${(m2 * 1e4).toFixed(1)} cm²`
+  if (m2 < 10000) return `${m2.toFixed(2)} m²`
+  return `${(m2 / 10000).toFixed(2)} ha`
+}
 
 export default function SurfacePanel() {
   const {
     streamStatus, fileType,
     surfaces, setSurfaces, updateSurface, setSurfaceColorMode, surfaceColorMode,
-    pointCloudGeoRef,
+    pointCloudGeoRef, meshObjectRef,
   } = useViewer()
   const [detecting, setDetecting] = useState(false)
   const [numSurfaces, setNumSurfaces] = useState(6)
   const [open, setOpen] = useState(true)
 
-  const isVisible = (streamStatus === 'done') && (!fileType || fileType === 'e57')
+  const isMesh = fileType && fileType !== 'e57'
+  const isVisible = streamStatus === 'done'
   if (!isVisible) return null
 
   async function handleDetect() {
-    const geoData = pointCloudGeoRef.current
-    if (!geoData) return
     setDetecting(true)
-
     await new Promise(r => setTimeout(r, 30))
 
     try {
-      const { geometry, matrixWorld, count } = geoData
-      const posAttr = geometry.getAttribute('position')
-      const worldPos = new Float32Array(count * 3)
-      const v = new THREE.Vector3()
-      for (let i = 0; i < count; i++) {
-        v.fromBufferAttribute(posAttr, i).applyMatrix4(matrixWorld)
-        worldPos[i * 3] = v.x
-        worldPos[i * 3 + 1] = v.y
-        worldPos[i * 3 + 2] = v.z
+      let detected
+      if (isMesh) {
+        const obj = meshObjectRef.current
+        if (!obj) return
+        detected = detectMeshSurfaces(obj, numSurfaces)
+      } else {
+        const geoData = pointCloudGeoRef.current
+        if (!geoData) return
+        const { geometry, matrixWorld, count } = geoData
+        const posAttr = geometry.getAttribute('position')
+        const worldPos = new Float32Array(count * 3)
+        const v = new THREE.Vector3()
+        for (let i = 0; i < count; i++) {
+          v.fromBufferAttribute(posAttr, i).applyMatrix4(matrixWorld)
+          worldPos[i * 3] = v.x
+          worldPos[i * 3 + 1] = v.y
+          worldPos[i * 3 + 2] = v.z
+        }
+        detected = detectSurfaces(worldPos, count, numSurfaces)
       }
-
-      const detected = detectSurfaces(worldPos, count, numSurfaces)
       setSurfaces(detected)
     } finally {
       setDetecting(false)
@@ -156,11 +169,13 @@ export default function SurfacePanel() {
                       }}
                     />
 
-                    {/* Point count */}
+                    {/* Area (mesh) or point count (point cloud) */}
                     <span style={{ color: '#64748b', fontSize: 10, flexShrink: 0 }}>
-                      {surf.pointCount > 1000
-                        ? `${(surf.pointCount / 1000).toFixed(1)}k`
-                        : surf.pointCount}
+                      {surf.area != null
+                        ? fmtArea(surf.area)
+                        : surf.pointCount > 1000
+                          ? `${(surf.pointCount / 1000).toFixed(1)}k pts`
+                          : `${surf.pointCount} pts`}
                     </span>
 
                     {/* Visibility toggle */}

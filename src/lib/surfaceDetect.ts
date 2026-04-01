@@ -7,6 +7,10 @@ export interface DetectedSurface {
   centroidY: number
   pointCount: number
   pointIndices: number[]
+  /** Exact area in m² (mesh surfaces only) */
+  area?: number
+  /** World-space triangle positions flat array [x,y,z, ...] (mesh surfaces only) */
+  worldTriangles?: Float32Array
 }
 
 const SURFACE_COLORS = [

@@ -61,6 +61,7 @@ export interface ViewerActions {
     matrixWorld: THREE.Matrix4
     count: number
   } | null>
+  meshObjectRef: React.MutableRefObject<THREE.Object3D | null>
 }
 
 const IDENTITY_QUAT: Quaternion4 = [0, 0, 0, 1]
@@ -118,10 +119,12 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
     count: number
   } | null>(null)
 
+  const meshObjectRef = useRef<THREE.Object3D | null>(null)
+
   // Memoize actions so their references are stable across re-renders.
   // All actions use the functional setState form, so no state is closed over
   // and setState itself is guaranteed stable by React.
-  const actions = useMemo<Omit<ViewerActions, 'pointCloudGeoRef'>>(
+  const actions = useMemo<Omit<ViewerActions, 'pointCloudGeoRef' | 'meshObjectRef'>>(
     () => ({
       setUploading: (fileName, fileSize) =>
         setState((s) => ({
@@ -170,7 +173,10 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
     [],
   )
 
-  const value = useMemo(() => ({ ...state, ...actions, pointCloudGeoRef }), [state, actions, pointCloudGeoRef])
+  const value = useMemo(
+    () => ({ ...state, ...actions, pointCloudGeoRef, meshObjectRef }),
+    [state, actions, pointCloudGeoRef, meshObjectRef],
+  )
 
   return (
     <ViewerContext.Provider value={value}>

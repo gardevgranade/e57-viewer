@@ -32,7 +32,7 @@ function applyDefaultMaterial(object: THREE.Object3D) {
 }
 
 export default function MeshModel({ flyCameraRef }: MeshModelProps) {
-  const { jobId, fileType, streamStatus, setDone, setError } = useViewer()
+  const { jobId, fileType, streamStatus, setDone, setError, meshObjectRef } = useViewer()
   const { camera } = useThree()
   const groupRef = useRef<THREE.Group>(null!)
   const sceneRef = useRef<THREE.Group | null>(null)
@@ -124,6 +124,9 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
         }
 
         setDone({ totalPoints: 0, bbox, hasColor: false, hasIntensity: false })
+
+        // Expose the loaded object for surface detection
+        meshObjectRef.current = sceneRef.current
 
         if (flyCameraRef.current) {
           flyCameraRef.current.fitToBox(worldBox)
