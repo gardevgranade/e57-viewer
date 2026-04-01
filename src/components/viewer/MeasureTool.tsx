@@ -38,18 +38,13 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     flyCameraRef.current?.setMeasureMode(measureActive)
   }, [measureActive, flyCameraRef])
 
-  // Escape = clear points
+  // Escape = clear points (works regardless of measure mode)
   useEffect(() => {
-    if (!measureActive) return
+    if (points.length === 0) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPoints([]) }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [measureActive])
-
-  // Clear points when leaving measure mode
-  useEffect(() => {
-    if (!measureActive) setPoints([])
-  }, [measureActive])
+  }, [points.length])
 
   // Click → raycast → add point
   useEffect(() => {
@@ -82,7 +77,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     return () => gl.domElement.removeEventListener('click', onClick)
   }, [measureActive, camera, gl, scene, bbox])
 
-  if (!measureActive || points.length === 0) return null
+  if (points.length === 0) return null
 
   const span = bbox
     ? Math.max(bbox.maxX - bbox.minX, bbox.maxZ - bbox.minZ)
