@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Html, Line } from '@react-three/drei'
@@ -27,11 +27,26 @@ function fmt(m: number) {
   return `${m.toFixed(3)} m`
 }
 
+function makeRaycaster(bbox: ReturnType<typeof useViewer>['bbox']) {
+  const span = bbox
+    ? Math.max(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY, bbox.maxZ - bbox.minZ)
+    : 10
+  const rc = new THREE.Raycaster()
+  rc.params.Points = { threshold: Math.max(span * 0.003, 0.01) }
+  return rc
+}
+
 export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const { measureActive, bbox } = useViewer()
   const { camera, gl, scene } = useThree()
   const [points, setPoints] = useState<MeasurePoint[]>([])
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null)
+  const draggingIdxRef = useRef<number | null>(null)
+  const justDraggedRef = useRef(false)
+
+  // Keep ref in sync with state
+  useEffect(() => { draggingIdxRef.current = draggingIdx }, [draggingIdx])
 
   // Tell FlyCamera not to orbit on left-click while measure is active
   useEffect(() => {
@@ -46,27 +61,59 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [points.length])
 
-  // Click → raycast → add point
+  // Drag: pointermove + pointerup on the canvas
   useEffect(() => {
-    if (!measureActive) return
+    if (draggingIdx === null) return
 
-    const span = bbox
-      ? Math.max(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY, bbox.maxZ - bbox.minZ)
-      : 10
-    const raycaster = new THREE.Raycaster()
-    raycaster.params.Points = { threshold: Math.max(span * 0.003, 0.01) }
+    const rc = makeRaycaster(bbox)
 
-    const onClick = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
+      const idx = draggingIdxRef.current
+      if (idx === null) return
       const rect = gl.domElement.getBoundingClientRect()
       const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
       const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1
-      raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
-
-      // Intersect everything; prefer Points then Mesh; skip non-geometry
-      const hits = raycaster
+      rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
+      const hits = rc
         .intersectObjects(scene.children, true)
         .filter((h) => h.object instanceof THREE.Points || h.object instanceof THREE.Mesh)
+      if (hits.length > 0) {
+        const p = hits[0].point
+        setPoints((prev) => prev.map((pt, i) => i === idx ? { x: p.x, y: p.y, z: p.z } : pt))
+      }
+    }
 
+    const onUp = () => {
+      justDraggedRef.current = true
+      setDraggingIdx(null)
+      setHoveredIdx(null)
+      // Restore orbit state to whatever measureActive is
+      flyCameraRef.current?.setMeasureMode(measureActive)
+    }
+
+    gl.domElement.addEventListener('pointermove', onMove)
+    gl.domElement.addEventListener('pointerup', onUp)
+    return () => {
+      gl.domElement.removeEventListener('pointermove', onMove)
+      gl.domElement.removeEventListener('pointerup', onUp)
+    }
+  }, [draggingIdx, bbox, camera, gl, scene, measureActive, flyCameraRef])
+
+  // Click → raycast → add point (only in measure mode, skip if drag just ended)
+  useEffect(() => {
+    if (!measureActive) return
+
+    const rc = makeRaycaster(bbox)
+
+    const onClick = (e: MouseEvent) => {
+      if (justDraggedRef.current) { justDraggedRef.current = false; return }
+      const rect = gl.domElement.getBoundingClientRect()
+      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1
+      rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
+      const hits = rc
+        .intersectObjects(scene.children, true)
+        .filter((h) => h.object instanceof THREE.Points || h.object instanceof THREE.Mesh)
       if (hits.length > 0) {
         const p = hits[0].point
         setPoints((prev) => [...prev, { x: p.x, y: p.y, z: p.z }])
@@ -100,10 +147,21 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
           position={[p.x, p.y, p.z]}
           renderOrder={999}
           onPointerEnter={(e) => { e.stopPropagation(); setHoveredIdx(i) }}
-          onPointerLeave={() => setHoveredIdx(null)}
+          onPointerLeave={() => { if (draggingIdx === null) setHoveredIdx(null) }}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            // Block orbit for the duration of the drag
+            flyCameraRef.current?.setMeasureMode(true)
+            setDraggingIdx(i)
+            setHoveredIdx(i)
+            gl.domElement.setPointerCapture(e.pointerId)
+          }}
         >
           <sphereGeometry args={[dotRadius, 10, 10]} />
-          <meshBasicMaterial color={hoveredIdx === i ? '#fb923c' : '#f97316'} depthTest={false} />
+          <meshBasicMaterial
+            color={draggingIdx === i ? '#fbbf24' : hoveredIdx === i ? '#fb923c' : '#f97316'}
+            depthTest={false}
+          />
         </mesh>
       ))}
 
@@ -178,3 +236,5 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     </>
   )
 }
+
+
