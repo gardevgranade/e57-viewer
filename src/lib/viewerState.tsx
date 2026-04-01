@@ -1,5 +1,7 @@
 import { createContext, useContext, useMemo, useRef, useState } from 'react'
+import * as THREE from 'three'
 import type { BoundingBox } from '../lib/jobStore.js'
+import type { DetectedSurface } from './surfaceDetect.js'
 
 export type StreamStatus = 'idle' | 'uploading' | 'streaming' | 'done' | 'error'
 export type ColorMode = 'rgb' | 'intensity' | 'height'
@@ -26,6 +28,8 @@ export interface ViewerState {
   fileType: string | null
   /** Whether the measurement tool is active */
   measureActive: boolean
+  surfaces: DetectedSurface[]
+  surfaceColorMode: boolean
 }
 
 export interface ViewerActions {
@@ -49,6 +53,14 @@ export interface ViewerActions {
   resetObjectRotation: () => void
   setFileType: (fileType: string | null) => void
   setMeasureActive: (active: boolean) => void
+  setSurfaces: (s: DetectedSurface[]) => void
+  updateSurface: (id: string, patch: Partial<Pick<DetectedSurface, 'color' | 'visible' | 'label'>>) => void
+  setSurfaceColorMode: (v: boolean) => void
+  pointCloudGeoRef: React.MutableRefObject<{
+    geometry: THREE.BufferGeometry
+    matrixWorld: THREE.Matrix4
+    count: number
+  } | null>
 }
 
 const IDENTITY_QUAT: Quaternion4 = [0, 0, 0, 1]
@@ -91,6 +103,8 @@ const initialState: ViewerState = {
   objectQuaternion: IDENTITY_QUAT,
   fileType: null,
   measureActive: false,
+  surfaces: [],
+  surfaceColorMode: false,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -98,10 +112,16 @@ const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
 export function ViewerProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<ViewerState>(initialState)
 
+  const pointCloudGeoRef = useRef<{
+    geometry: THREE.BufferGeometry
+    matrixWorld: THREE.Matrix4
+    count: number
+  } | null>(null)
+
   // Memoize actions so their references are stable across re-renders.
   // All actions use the functional setState form, so no state is closed over
   // and setState itself is guaranteed stable by React.
-  const actions = useMemo<ViewerActions>(
+  const actions = useMemo<Omit<ViewerActions, 'pointCloudGeoRef'>>(
     () => ({
       setUploading: (fileName, fileSize) =>
         setState((s) => ({
@@ -138,11 +158,19 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
       resetObjectRotation: () => setState((s) => ({ ...s, objectQuaternion: IDENTITY_QUAT })),
       setFileType: (fileType) => setState((s) => ({ ...s, fileType })),
       setMeasureActive: (measureActive) => setState((s) => ({ ...s, measureActive })),
+      setSurfaces: (surfaces) =>
+        setState((s) => ({ ...s, surfaces, surfaceColorMode: surfaces.length > 0 })),
+      updateSurface: (id, patch) =>
+        setState((s) => ({
+          ...s,
+          surfaces: s.surfaces.map(surf => surf.id === id ? { ...surf, ...patch } : surf),
+        })),
+      setSurfaceColorMode: (surfaceColorMode) => setState((s) => ({ ...s, surfaceColorMode })),
     }),
     [],
   )
 
-  const value = useMemo(() => ({ ...state, ...actions }), [state, actions])
+  const value = useMemo(() => ({ ...state, ...actions, pointCloudGeoRef }), [state, actions, pointCloudGeoRef])
 
   return (
     <ViewerContext.Provider value={value}>

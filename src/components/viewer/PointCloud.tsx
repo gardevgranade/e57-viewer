@@ -31,12 +31,17 @@ function growBuffers(buf: Buffers, needed: number): Buffers {
   return { positions, colors, intensities, count: buf.count, capacity: newCapacity }
 }
 
+function hexToRgb01(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16)
+  return [(n >> 16 & 0xff) / 255, (n >> 8 & 0xff) / 255, (n & 0xff) / 255]
+}
+
 interface PointCloudProps {
   flyCameraRef: React.RefObject<FlyCameraHandle | null>
 }
 
 export default function PointCloud({ flyCameraRef }: PointCloudProps) {
-  const { jobId, streamStatus, pointSize, colorMode, addLoadedPoints, setDone, setError, objectQuaternion, bbox, fileType } =
+  const { jobId, streamStatus, pointSize, colorMode, addLoadedPoints, setDone, setError, objectQuaternion, bbox, fileType, surfaces, surfaceColorMode, setColorMode, pointCloudGeoRef } =
     useViewer()
 
   const pointsRef = useRef<THREE.Points>(null!)
@@ -154,6 +159,37 @@ export default function PointCloud({ flyCameraRef }: PointCloudProps) {
       material.uniforms.uColorMode.value = colorModeToInt(colorMode)
     }
   }, [colorMode, material])
+
+  // Apply surface color override
+  useEffect(() => {
+    const colAttr = geometry.getAttribute('color') as THREE.BufferAttribute
+    const colArr = colAttr.array as Float32Array
+    const count = buffersRef.current.count
+    if (count === 0) return
+
+    if (!surfaceColorMode || surfaces.length === 0) {
+      colArr.set(buffersRef.current.colors.subarray(0, count * 3))
+      colAttr.needsUpdate = true
+      return
+    }
+
+    const override = new Float32Array(count * 3).fill(0.12)
+    for (const surf of surfaces) {
+      if (!surf.visible) continue
+      const [r, g, b] = hexToRgb01(surf.color)
+      for (const idx of surf.pointIndices) {
+        if (idx < count) {
+          override[idx * 3] = r
+          override[idx * 3 + 1] = g
+          override[idx * 3 + 2] = b
+        }
+      }
+    }
+    colArr.set(override)
+    colAttr.needsUpdate = true
+    setColorMode('rgb')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surfaces, surfaceColorMode, geometry])
 
   // Stream handler — only for E57 point clouds
   useEffect(() => {
@@ -321,6 +357,14 @@ export default function PointCloud({ flyCameraRef }: PointCloudProps) {
           hasColor: msg.hasColor,
           hasIntensity: msg.hasIntensity,
         })
+        // Make geometry accessible for surface detection
+        if (groupRef.current) {
+          pointCloudGeoRef.current = {
+            geometry,
+            matrixWorld: groupRef.current.matrixWorld.clone(),
+            count: buffersRef.current.count,
+          }
+        }
       } else if (msg.type === 'error') {
         console.error('[PointCloud] Stream error:', msg.message)
         es.close()

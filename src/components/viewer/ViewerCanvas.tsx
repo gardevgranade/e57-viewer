@@ -10,6 +10,7 @@ import MeshModel from './MeshModel.js'
 import MeasureTool from './MeasureTool.js'
 import ViewerControls from './ViewerControls.js'
 import FlyCamera, { type FlyCameraHandle } from './FlyCamera.js'
+import SurfacePanel from './SurfacePanel.js'
 
 function SceneGrid() {
   const { bbox } = useViewer()
@@ -79,6 +80,7 @@ export default function ViewerCanvas() {
       </Canvas>
 
       <ViewerControls />
+      <SurfacePanel />
     </div>
   )
 }
