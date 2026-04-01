@@ -11,6 +11,8 @@ export interface DetectedSurface {
   area?: number
   /** World-space triangle positions flat array [x,y,z, ...] (mesh surfaces only) */
   worldTriangles?: Float32Array
+  /** World-space surface normal (unit vector) */
+  normal?: [number, number, number]
 }
 
 const SURFACE_COLORS = [
@@ -170,6 +172,7 @@ export function detectSurfaces(
       centroidY,
       pointCount: pts.length,
       pointIndices: pts,
+      normal: [plane.nx, plane.ny, plane.nz] as [number, number, number],
     }
   })
 

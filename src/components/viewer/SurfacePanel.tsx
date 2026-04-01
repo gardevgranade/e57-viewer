@@ -5,6 +5,7 @@ import { useViewer } from '../../lib/viewerState.js'
 import type { PickedSurface, SurfaceGroup } from '../../lib/viewerState.js'
 import { detectSurfaces } from '../../lib/surfaceDetect.js'
 import { detectMeshSurfaces, splitSurfaceTriangles } from '../../lib/meshSurfaceDetect.js'
+import { extractBoundaryPolygon } from '../../lib/surfaceBoundary.js'
 import * as THREE from 'three'
 
 function fmtArea(m2: number) {
@@ -27,13 +28,17 @@ interface SurfaceRowProps {
   onUpdate: (id: string, patch: Partial<Pick<PickedSurface, 'label' | 'color' | 'visible' | 'groupId'>>) => void
   onRemove: (id: string) => void
   onSplit: (id: string) => void
+  onTrace: (id: string) => void
+  /** Extra info line shown below the main row (slope, elevation, etc.) */
+  param?: string
 }
 
-function SurfaceRow({ surf, groups, onUpdate, onRemove, onSplit }: SurfaceRowProps) {
+function SurfaceRow({ surf, groups, onUpdate, onRemove, onSplit, onTrace, param }: SurfaceRowProps) {
   return (
+    <div>
     <div style={{
       display: 'flex', alignItems: 'center', gap: 4,
-      background: 'rgba(255,255,255,0.03)', borderRadius: 5, padding: '3px 5px',
+      background: 'rgba(255,255,255,0.03)', borderRadius: param ? '5px 5px 0 0' : 5, padding: '3px 5px',
       opacity: surf.visible ? 1 : 0.45,
     }}>
       {/* Color swatch / picker */}
@@ -99,6 +104,17 @@ function SurfaceRow({ surf, groups, onUpdate, onRemove, onSplit }: SurfaceRowPro
         {surf.visible ? '👁' : '🙈'}
       </button>
 
+      {/* Trace perimeter with measure tool */}
+      {surf.worldTriangles && surf.worldTriangles.length >= 27 && (
+        <button
+          onClick={() => onTrace(surf.id)}
+          title="Trace perimeter with measure tool"
+          style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}
+        >
+          📏
+        </button>
+      )}
+
       {/* Split surface */}
       {surf.worldTriangles && surf.worldTriangles.length >= 18 && (
         <button
@@ -119,6 +135,15 @@ function SurfaceRow({ surf, groups, onUpdate, onRemove, onSplit }: SurfaceRowPro
         🗑
       </button>
     </div>
+    {param && (
+      <div style={{
+        background: 'rgba(255,255,255,0.02)', borderRadius: '0 0 5px 5px',
+        padding: '2px 8px', fontSize: 10, color: '#64748b',
+      }}>
+        {param}
+      </div>
+    )}
+    </div>
   )
 }
 
@@ -138,11 +163,14 @@ export default function SurfacePanel() {
     setSurfaceColorMode, surfaceColorMode,
     pickSurfaceMode, setPickSurfaceMode,
     pointCloudGeoRef, meshObjectRef,
+    meshVisible, setMeshVisible,
+    traceSurfaceMeasure,
   } = useViewer()
 
   const [detecting, setDetecting] = useState(false)
   const [open, setOpen] = useState(true)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [filterType, setFilterType] = useState<'all' | 'roof' | 'floor' | 'wall'>('all')
 
   const isMesh = fileType && fileType !== 'e57'
   if (streamStatus !== 'done') return null
@@ -188,6 +216,7 @@ export default function SurfacePanel() {
         pointCount: d.pointCount,
         area: d.area,
         worldTriangles: d.worldTriangles,
+        normal: d.normal,
       }))
       setSurfaces(picked)
     } finally {
@@ -205,7 +234,7 @@ export default function SurfacePanel() {
       const picked: PickedSurface[] = detected.map(d => ({
         id: d.id, label: d.label, color: d.color, visible: d.visible,
         groupId: null, area: d.area, worldTriangles: d.worldTriangles,
-        pointIndices: [], pointCount: d.pointCount,
+        pointIndices: [], pointCount: d.pointCount, normal: d.normal,
       }))
       setSurfaces(picked)
     } finally {
@@ -251,11 +280,50 @@ export default function SurfacePanel() {
     replaceSurface(id, replacements)
   }
 
+  function handleTrace(id: string) {
+    const surf = surfaces.find(s => s.id === id)
+    if (!surf?.worldTriangles) return
+    const pts = extractBoundaryPolygon(surf.worldTriangles)
+    if (!pts || pts.length < 3) return
+    traceSurfaceMeasure(pts)
+  }
+
+  // Derive surface type from label for filtering
+  function surfaceType(label: string): 'roof' | 'floor' | 'wall' | 'other' {
+    const l = label.toLowerCase()
+    if (l.startsWith('roof')) return 'roof'
+    if (l.startsWith('floor')) return 'floor'
+    if (l.startsWith('wall')) return 'wall'
+    return 'other'
+  }
+
+  function matchesFilter(surf: PickedSurface) {
+    if (filterType === 'all') return true
+    return surfaceType(surf.label) === filterType
+  }
+
+  // Slope angle in degrees (from horizontal): arccos(|normalY|)
+  function slopeAngle(normal: [number, number, number] | undefined): string | null {
+    if (!normal) return null
+    const absy = Math.abs(normal[1])
+    const angle = Math.acos(Math.min(1, absy)) * 180 / Math.PI
+    return `${angle.toFixed(1)}°`
+  }
+
+  // Centroid Y elevation from worldTriangles
+  function elevation(wt: Float32Array | undefined): string | null {
+    if (!wt || wt.length < 9) return null
+    let sum = 0
+    const n = Math.floor(wt.length / 9)
+    for (let i = 0; i < n; i++) sum += wt[i*9+1]!
+    return `Y: ${(sum / n).toFixed(2)} m`
+  }
+
   function handleAddGroup() {
     addGroup({ id: `group-${Date.now()}`, label: `Group ${surfaceGroups.length + 1}` })
   }
 
-  const ungroupedSurfaces = surfaces.filter(s => s.groupId === null)
+  const ungroupedSurfaces = surfaces.filter(s => s.groupId === null && matchesFilter(s))
 
   return (
     <div style={{
@@ -280,6 +348,32 @@ export default function SurfacePanel() {
 
       {open && (
         <>
+          {/* ── Filter pills + hide model ── */}
+          {surfaces.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
+              {(['all', 'roof', 'floor', 'wall'] as const).map(ft => (
+                <button key={ft} onClick={() => setFilterType(ft)} style={{
+                  padding: '1px 7px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                  background: filterType === ft ? '#334155' : 'transparent',
+                  border: '1px solid #334155', borderRadius: 10,
+                  color: filterType === ft ? '#e2e8f0' : '#64748b',
+                }}>
+                  {ft === 'all' ? 'All' : ft.charAt(0).toUpperCase() + ft.slice(1)}
+                </button>
+              ))}
+              {isMesh && (
+                <button onClick={() => setMeshVisible(!meshVisible)} style={{
+                  marginLeft: 'auto', padding: '1px 7px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                  background: meshVisible ? 'transparent' : '#1e293b',
+                  border: `1px solid ${meshVisible ? '#334155' : '#7c3aed'}`,
+                  borderRadius: 10, color: meshVisible ? '#64748b' : '#c4b5fd',
+                }}>
+                  {meshVisible ? '👁 Model' : '🙈 Model'}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* ── Mesh: pick-surface toggle + auto-detect ── */}
           {isMesh && (
             <div style={{ marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -342,7 +436,7 @@ export default function SurfacePanel() {
 
               {/* Groups */}
               {surfaceGroups.map(group => {
-                const inGroup = surfaces.filter(s => s.groupId === group.id)
+                const inGroup = surfaces.filter(s => s.groupId === group.id && matchesFilter(s))
                 const collapsed = collapsedGroups.has(group.id)
                 const anyVisible = inGroup.some(s => s.visible)
                 const totalArea = groupTotalArea(group.id, surfaces)
@@ -394,9 +488,19 @@ export default function SurfacePanel() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '3px 4px' }}>
                         {inGroup.length === 0
                           ? <div style={{ color: '#475569', fontSize: 11, textAlign: 'center', padding: '4px 0' }}>No surfaces</div>
-                          : inGroup.map(surf => (
-                            <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups} onUpdate={updateSurface} onRemove={removeSurface} onSplit={handleSplit} />
-                          ))
+                          : inGroup.map(surf => {
+                              const type = surfaceType(surf.label)
+                              const p = type === 'roof'
+                                ? `Slope: ${slopeAngle(surf.normal) ?? '—'}`
+                                : type === 'floor'
+                                  ? elevation(surf.worldTriangles) ?? undefined
+                                  : undefined
+                              return (
+                                <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups}
+                                  onUpdate={updateSurface} onRemove={removeSurface}
+                                  onSplit={handleSplit} onTrace={handleTrace} param={p} />
+                              )
+                            })
                         }
                         {inGroup.length > 0 && (
                           <div style={{ color: '#475569', fontSize: 10, textAlign: 'right', paddingRight: 4 }}>
@@ -425,9 +529,19 @@ export default function SurfacePanel() {
                     <span style={{ color: '#475569', fontSize: 10 }}>{ungroupedSurfaces.length} surface{ungroupedSurfaces.length !== 1 ? 's' : ''}</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '3px 4px' }}>
-                    {ungroupedSurfaces.map(surf => (
-                      <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups} onUpdate={updateSurface} onRemove={removeSurface} onSplit={handleSplit} />
-                    ))}
+                    {ungroupedSurfaces.map(surf => {
+                      const type = surfaceType(surf.label)
+                      const p = type === 'roof'
+                        ? `Slope: ${slopeAngle(surf.normal) ?? '—'}`
+                        : type === 'floor'
+                          ? elevation(surf.worldTriangles) ?? undefined
+                          : undefined
+                      return (
+                        <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups}
+                          onUpdate={updateSurface} onRemove={removeSurface}
+                          onSplit={handleSplit} onTrace={handleTrace} param={p} />
+                      )
+                    })}
                   </div>
                 </div>
               )}

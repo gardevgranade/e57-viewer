@@ -68,7 +68,7 @@ function makeRaycaster(bbox: ReturnType<typeof useViewer>['bbox']) {
 }
 
 export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
-  const { measureActive, bbox } = useViewer()
+  const { measureActive, bbox, measureTraceSerial, measureTracePts, setMeasureActive } = useViewer()
   const { camera, gl, scene } = useThree()
   const [points, setPoints] = useState<MeasurePoint[]>([])
   const [isClosed, setIsClosed] = useState(false)
@@ -76,11 +76,22 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null)
   const draggingIdxRef = useRef<number | null>(null)
   const justDraggedRef = useRef(false)
-  // Set by sphere onPointerDown so the click handler knows which sphere was hit
   const sphereClickRef = useRef<number | null>(null)
+  const prevTraceSerialRef = useRef(0)
 
   // Keep ref in sync with state
   useEffect(() => { draggingIdxRef.current = draggingIdx }, [draggingIdx])
+
+  // When a surface perimeter trace is requested, pre-populate points
+  useEffect(() => {
+    if (measureTraceSerial === 0 || measureTraceSerial === prevTraceSerialRef.current) return
+    prevTraceSerialRef.current = measureTraceSerial
+    if (measureTracePts.length >= 3) {
+      setPoints(measureTracePts)
+      setIsClosed(true)
+      setMeasureActive(true)
+    }
+  }, [measureTraceSerial, measureTracePts, setMeasureActive])
 
   // Tell FlyCamera not to orbit on left-click while measure is active
   useEffect(() => {

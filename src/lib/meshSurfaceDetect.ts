@@ -164,6 +164,7 @@ export function detectMeshSurfaces(
 
   // Split each normal cluster into spatially connected components
   interface Candidate {
+    nx: number; ny: number; nz: number
     normalY: number; totalArea: number; centroidY: number
     triPositions: number[]; triCount: number
   }
@@ -173,6 +174,7 @@ export function detectMeshSurfaces(
     if (cl.tris.length === 0) continue
     const len = Math.sqrt(cl.nx*cl.nx + cl.ny*cl.ny + cl.nz*cl.nz) || 1
     const normalY = cl.ny / len
+    const nx = cl.nx / len, ny = cl.ny / len, nz = cl.nz / len
 
     const assignment = spatialComponents(cl.tris)
     let numComponents = 0
@@ -192,6 +194,7 @@ export function detectMeshSurfaces(
       }
       if (totalArea < 1e-10) continue
       candidates.push({
+        nx, ny, nz,
         normalY, totalArea, centroidY: centroidYAccum / totalArea,
         triPositions, triCount: triPositions.length / 9,
       })
@@ -226,6 +229,7 @@ export function detectMeshSurfaces(
       pointIndices: [],
       area: c.totalArea,
       worldTriangles: new Float32Array(c.triPositions),
+      normal: [c.nx, c.ny, c.nz] as [number, number, number],
     }
   })
 

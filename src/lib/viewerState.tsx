@@ -16,6 +16,8 @@ export interface PickedSurface {
   worldTriangles?: Float32Array
   pointIndices?: number[]
   pointCount?: number
+  /** World-space surface normal (unit vector) */
+  normal?: [number, number, number]
 }
 
 export interface SurfaceGroup {
@@ -48,6 +50,10 @@ export interface ViewerState {
   surfaceGroups: SurfaceGroup[]
   surfaceColorMode: boolean
   pickSurfaceMode: boolean
+  meshVisible: boolean
+  /** When serial changes, MeasureTool will pre-populate with these points */
+  measureTraceSerial: number
+  measureTracePts: Array<{ x: number; y: number; z: number }>
 }
 
 export interface ViewerActions {
@@ -81,6 +87,8 @@ export interface ViewerActions {
   updateGroup: (id: string, patch: Partial<Pick<SurfaceGroup, 'label'>>) => void
   setSurfaceColorMode: (v: boolean) => void
   setPickSurfaceMode: (v: boolean) => void
+  setMeshVisible: (v: boolean) => void
+  traceSurfaceMeasure: (pts: Array<{ x: number; y: number; z: number }>) => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
     matrixWorld: THREE.Matrix4
@@ -133,6 +141,9 @@ const initialState: ViewerState = {
   surfaceGroups: [],
   surfaceColorMode: false,
   pickSurfaceMode: false,
+  meshVisible: true,
+  measureTraceSerial: 0,
+  measureTracePts: [],
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -228,6 +239,9 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
         })),
       setSurfaceColorMode: (surfaceColorMode) => setState((s) => ({ ...s, surfaceColorMode })),
       setPickSurfaceMode: (pickSurfaceMode) => setState((s) => ({ ...s, pickSurfaceMode })),
+      setMeshVisible: (meshVisible) => setState((s) => ({ ...s, meshVisible })),
+      traceSurfaceMeasure: (pts) =>
+        setState((s) => ({ ...s, measureTracePts: pts, measureTraceSerial: s.measureTraceSerial + 1 })),
     }),
     [],
   )

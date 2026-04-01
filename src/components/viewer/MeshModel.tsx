@@ -32,7 +32,7 @@ function applyDefaultMaterial(object: THREE.Object3D) {
 }
 
 export default function MeshModel({ flyCameraRef }: MeshModelProps) {
-  const { jobId, fileType, streamStatus, setDone, setError, meshObjectRef } = useViewer()
+  const { jobId, fileType, streamStatus, setDone, setError, meshObjectRef, meshVisible } = useViewer()
   const { camera } = useThree()
   const groupRef = useRef<THREE.Group>(null!)
   const sceneRef = useRef<THREE.Group | null>(null)
@@ -154,6 +154,11 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
     const userQ = new THREE.Quaternion(...objectQuaternion)
     groupRef.current.quaternion.copy(userQ.multiply(baseQ))
   }, [objectQuaternion])
+
+  // Toggle mesh visibility
+  useEffect(() => {
+    if (groupRef.current) groupRef.current.visible = meshVisible
+  }, [meshVisible])
 
   const ambientLight = useMemo(() => new THREE.AmbientLight(0xffffff, 0.6), [])
   void ambientLight
