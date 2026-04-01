@@ -1,180 +1,140 @@
 import * as THREE from 'three'
 import type { DetectedSurface } from './surfaceDetect.js'
-import { buildAdjacency, edgeKey } from './meshPicker.js'
 
 const SURFACE_COLORS = [
   '#ef4444', '#3b82f6', '#8b5cf6', '#f59e0b',
   '#10b981', '#ec4899', '#14b8a6', '#f97316',
 ]
 
-const COS_THRESHOLD = Math.cos((20 * Math.PI) / 180) // ~0.940
+const NORMAL_DOT_THRESHOLD = Math.cos((20 * Math.PI) / 180) // ≈ 0.940
 
-interface Candidate {
-  area: number
-  normalY: number
-  centroidY: number
-  triPositions: number[]
+interface Cluster {
+  nx: number; ny: number; nz: number   // running avg normal (not normalized yet)
+  totalArea: number
+  sumCx: number; sumCy: number; sumCz: number  // centroid accumulator
   triCount: number
+  triPositions: number[]  // flat [x,y,z, x,y,z, x,y,z, ...]
 }
 
 export function detectMeshSurfaces(
   root: THREE.Object3D,
   numSurfaces: number,
 ): DetectedSurface[] {
-  const candidates: Candidate[] = []
+  const clusters: Cluster[] = []
 
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return
     const geo = child.geometry as THREE.BufferGeometry
     if (!geo) return
+
     const posAttr = geo.getAttribute('position') as THREE.BufferAttribute | undefined
     if (!posAttr) return
 
-    const mat = child.matrixWorld
     const index = geo.index
-    const getVI = index ? (i: number) => index.getX(i) : (i: number) => i
+    const mat = child.matrixWorld
+
     const triCount = index ? index.count / 3 : posAttr.count / 3
-    if (triCount === 0) return
+    const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3()
+    const edge1 = new THREE.Vector3(), edge2 = new THREE.Vector3()
+    const normal = new THREE.Vector3()
 
-    // Build / retrieve edge adjacency
-    const adj = buildAdjacency(geo)
-
-    // Compute local (object-space) normal per triangle
-    const localNormals: THREE.Vector3[] = new Array(triCount)
-    const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3()
     for (let t = 0; t < triCount; t++) {
-      _a.fromBufferAttribute(posAttr, getVI(t * 3))
-      _b.fromBufferAttribute(posAttr, getVI(t * 3 + 1))
-      _c.fromBufferAttribute(posAttr, getVI(t * 3 + 2))
-      localNormals[t] = new THREE.Vector3()
-        .crossVectors(_b.clone().sub(_a), _c.clone().sub(_a))
-        .normalize()
-    }
-
-    // Step 1 — cluster triangles by normal similarity
-    interface Cluster { normalSum: THREE.Vector3; tris: number[] }
-    const clusters: Cluster[] = []
-    for (let t = 0; t < triCount; t++) {
-      const n = localNormals[t]!
-      let best: Cluster | null = null
-      let bestDot = COS_THRESHOLD
-      for (const cl of clusters) {
-        const dot = n.dot(cl.normalSum.clone().normalize())
-        if (dot > bestDot) { bestDot = dot; best = cl }
-      }
-      if (best) {
-        best.normalSum.add(n)
-        best.tris.push(t)
+      let ia: number, ib: number, ic: number
+      if (index) {
+        ia = index.getX(t * 3)
+        ib = index.getX(t * 3 + 1)
+        ic = index.getX(t * 3 + 2)
       } else {
-        clusters.push({ normalSum: n.clone(), tris: [t] })
+        ia = t * 3; ib = t * 3 + 1; ic = t * 3 + 2
       }
-    }
 
-    // Step 2 — within each normal cluster, split into connected components
-    const normalMatrix = new THREE.Matrix3().getNormalMatrix(mat)
+      va.fromBufferAttribute(posAttr, ia).applyMatrix4(mat)
+      vb.fromBufferAttribute(posAttr, ib).applyMatrix4(mat)
+      vc.fromBufferAttribute(posAttr, ic).applyMatrix4(mat)
 
-    for (const cluster of clusters) {
-      const clWorldNormal = cluster.normalSum.clone()
-        .normalize()
-        .applyMatrix3(normalMatrix)
-        .normalize()
+      edge1.subVectors(vb, va)
+      edge2.subVectors(vc, va)
+      normal.crossVectors(edge1, edge2)
 
-      const unvisited = new Set(cluster.tris)
+      const area = normal.length() / 2
+      if (area < 1e-12) continue
+      normal.normalize()
 
-      while (unvisited.size > 0) {
-        // BFS from an arbitrary unvisited triangle in this cluster
-        const start = unvisited.values().next().value!
-        unvisited.delete(start)
-        const component: number[] = [start]
-        const queue: number[] = [start]
+      const cx = (va.x + vb.x + vc.x) / 3
+      const cy = (va.y + vb.y + vc.y) / 3
+      const cz = (va.z + vb.z + vc.z) / 3
 
-        while (queue.length > 0) {
-          const t = queue.pop()!
-          const i0 = getVI(t * 3), i1 = getVI(t * 3 + 1), i2 = getVI(t * 3 + 2)
-          for (const [a, b] of [[i0, i1], [i1, i2], [i2, i0]] as [number, number][]) {
-            const neighbors = adj.get(edgeKey(a, b))
-            if (!neighbors) continue
-            for (const nb of neighbors) {
-              if (!unvisited.has(nb)) continue
-              unvisited.delete(nb)
-              component.push(nb)
-              queue.push(nb)
-            }
-          }
-        }
+      // Find best matching cluster
+      let bestCluster: Cluster | null = null
+      let bestDot = NORMAL_DOT_THRESHOLD
+      for (const cl of clusters) {
+        const len = Math.sqrt(cl.nx * cl.nx + cl.ny * cl.ny + cl.nz * cl.nz)
+        if (len < 1e-10) continue
+        const dot = (normal.x * cl.nx + normal.y * cl.ny + normal.z * cl.nz) / len
+        if (dot > bestDot) { bestDot = dot; bestCluster = cl }
+      }
 
-        // Compute world-space area, centroid, triangle positions
-        let area = 0, centroidYAccum = 0
-        const triPositions: number[] = []
-        const wA = new THREE.Vector3(), wB = new THREE.Vector3(), wC = new THREE.Vector3()
-        const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), cross = new THREE.Vector3()
-
-        for (const t of component) {
-          wA.fromBufferAttribute(posAttr, getVI(t * 3)).applyMatrix4(mat)
-          wB.fromBufferAttribute(posAttr, getVI(t * 3 + 1)).applyMatrix4(mat)
-          wC.fromBufferAttribute(posAttr, getVI(t * 3 + 2)).applyMatrix4(mat)
-
-          e1.subVectors(wB, wA)
-          e2.subVectors(wC, wA)
-          cross.crossVectors(e1, e2)
-          const triArea = cross.length() * 0.5
-          area += triArea
-          centroidYAccum += ((wA.y + wB.y + wC.y) / 3) * triArea
-
-          triPositions.push(
-            wA.x, wA.y, wA.z,
-            wB.x, wB.y, wB.z,
-            wC.x, wC.y, wC.z,
-          )
-        }
-
-        if (area < 1e-10) continue
-
-        candidates.push({
-          area,
-          normalY: clWorldNormal.y,
-          centroidY: centroidYAccum / area,
-          triPositions,
-          triCount: component.length,
+      if (bestCluster) {
+        bestCluster.nx += normal.x
+        bestCluster.ny += normal.y
+        bestCluster.nz += normal.z
+        bestCluster.totalArea += area
+        bestCluster.sumCx += cx * area
+        bestCluster.sumCy += cy * area
+        bestCluster.sumCz += cz * area
+        bestCluster.triCount++
+        bestCluster.triPositions.push(
+          va.x, va.y, va.z,
+          vb.x, vb.y, vb.z,
+          vc.x, vc.y, vc.z,
+        )
+      } else {
+        clusters.push({
+          nx: normal.x, ny: normal.y, nz: normal.z,
+          totalArea: area,
+          sumCx: cx * area, sumCy: cy * area, sumCz: cz * area,
+          triCount: 1,
+          triPositions: [va.x, va.y, va.z, vb.x, vb.y, vb.z, vc.x, vc.y, vc.z],
         })
       }
     }
   })
 
-  if (candidates.length === 0) return []
+  if (clusters.length === 0) return []
 
-  // Sort by area descending
-  candidates.sort((a, b) => b.area - a.area)
+  // Sort by area, keep top N
+  clusters.sort((a, b) => b.totalArea - a.totalArea)
+  const top = clusters.slice(0, numSurfaces)
 
-  // Drop tiny fragments: keep only components ≥ 2% of the largest surface's area.
-  // This removes mesh seams, UV-split slivers, and other micro-patches that would
-  // otherwise pollute the top-N list.
-  const minArea = (candidates[0]?.area ?? 0) * 0.02
-  const significant = candidates.filter(c => c.area >= minArea)
-
-  const top = significant.slice(0, numSurfaces)
-
-  const centroidYs = top.map(c => c.centroidY)
+  const centroidYs = top.map(cl => cl.sumCy / cl.totalArea)
   const sorted = [...centroidYs].sort((a, b) => a - b)
   const medianY = sorted[Math.floor(sorted.length / 2)] ?? 0
 
   const labelCounts: Record<string, number> = {}
-  const results: DetectedSurface[] = top.map((c, i) => {
-    const base = Math.abs(c.normalY) > 0.65
-      ? (c.centroidY >= medianY ? 'Roof' : 'Floor')
-      : 'Wall'
+  const results: DetectedSurface[] = top.map((cl, i) => {
+    const len = Math.sqrt(cl.nx * cl.nx + cl.ny * cl.ny + cl.nz * cl.nz) || 1
+    const normalY = cl.ny / len
+    const centroidY = cl.sumCy / cl.totalArea
+
+    let base: string
+    if (Math.abs(normalY) > 0.65) {
+      base = centroidY >= medianY ? 'Roof' : 'Floor'
+    } else {
+      base = 'Wall'
+    }
     labelCounts[base] = (labelCounts[base] ?? 0) + 1
+
     return {
       id: `mesh-surface-${i}`,
       label: base,
       color: SURFACE_COLORS[i % SURFACE_COLORS.length]!,
       visible: true,
-      normalY: c.normalY,
-      centroidY: c.centroidY,
-      pointCount: c.triCount,
+      normalY,
+      centroidY,
+      pointCount: cl.triCount,
       pointIndices: [],
-      area: c.area,
-      worldTriangles: new Float32Array(c.triPositions),
+      area: cl.totalArea,
+      worldTriangles: new Float32Array(cl.triPositions),
     }
   })
 
