@@ -36,11 +36,28 @@ interface PointCloudProps {
 }
 
 export default function PointCloud({ flyCameraRef }: PointCloudProps) {
-  const { jobId, streamStatus, pointSize, colorMode, addLoadedPoints, setDone, setError } =
+  const { jobId, streamStatus, pointSize, colorMode, addLoadedPoints, setDone, setError, objectQuaternion, bbox } =
     useViewer()
 
   const pointsRef = useRef<THREE.Points>(null!)
+  const groupRef = useRef<THREE.Group>(null!)
   const { camera } = useThree()
+
+  // Apply object quaternion imperatively to avoid R3F type issues
+  useEffect(() => {
+    if (!groupRef.current) return
+    groupRef.current.quaternion.set(...objectQuaternion)
+  }, [objectQuaternion])
+
+  // Ground-snap + center: position computed from live bbox state
+  const groupPosition = useMemo<[number, number, number]>(() => {
+    if (!bbox) return [0, 0, 0]
+    return [
+      -((bbox.minX + bbox.maxX) / 2),
+      -bbox.minY,
+      -((bbox.minZ + bbox.maxZ) / 2),
+    ]
+  }, [bbox])
 
   const buffersRef = useRef<Buffers>({
     positions: new Float32Array(INITIAL_CAPACITY * 3),
@@ -271,21 +288,23 @@ export default function PointCloud({ flyCameraRef }: PointCloudProps) {
           hasIntensity: msg.hasIntensity,
         })
         es.close()
-        // Fly camera to fit the bounding box
+        // Fly camera to fit the world-space (centered + ground-snapped) bounding box
         if (msg.bbox) {
           const { minX, minY, minZ: bMinZ, maxX, maxY, maxZ: bMaxZ } = msg.bbox
-          const box = new THREE.Box3(
-            new THREE.Vector3(minX, minY, bMinZ),
-            new THREE.Vector3(maxX, maxY, bMaxZ),
+          const halfX = (maxX - minX) / 2
+          const halfZ = (bMaxZ - bMinZ) / 2
+          const height = maxY - minY
+          // World-space box: centered on X/Z, bottom at Y=0
+          const worldBox = new THREE.Box3(
+            new THREE.Vector3(-halfX, 0, -halfZ),
+            new THREE.Vector3(halfX, height, halfZ),
           )
           if (flyCameraRef.current) {
-            flyCameraRef.current.fitToBox(box)
+            flyCameraRef.current.fitToBox(worldBox)
           } else {
-            const center = box.getCenter(new THREE.Vector3())
-            const size = box.getSize(new THREE.Vector3())
-            const span = Math.max(size.x, size.y, size.z)
-            camera.position.set(center.x, center.y - span * 1.5, center.z + span * 0.5)
-            camera.lookAt(center.x, center.y, center.z)
+            const span = Math.max(halfX * 2, height, halfZ * 2)
+            camera.position.set(0, -span * 1.2, span * 0.5)
+            camera.lookAt(0, height / 2, 0)
           }
         }
         setDone({
@@ -315,7 +334,9 @@ export default function PointCloud({ flyCameraRef }: PointCloudProps) {
   }, [jobId, streamStatus, geometry, material, camera, addLoadedPoints, setDone, setError])
 
   return (
-    <points ref={pointsRef} geometry={geometry} material={material} />
+    <group ref={groupRef} position={groupPosition}>
+      <points ref={pointsRef} geometry={geometry} material={material} />
+    </group>
   )
 }
 

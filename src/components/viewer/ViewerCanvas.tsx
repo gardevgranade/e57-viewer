@@ -2,12 +2,35 @@
 
 import { Suspense, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { GizmoHelper, GizmoViewport } from '@react-three/drei'
+import { GizmoHelper, GizmoViewport, Grid } from '@react-three/drei'
 import { useViewer } from '../../lib/viewerState.js'
 import PointCloud from './PointCloud.js'
 import MeshOverlay from './MeshOverlay.js'
 import ViewerControls from './ViewerControls.js'
 import FlyCamera, { type FlyCameraHandle } from './FlyCamera.js'
+
+function SceneGrid() {
+  const { bbox } = useViewer()
+  // Scale cell size to the scene: 1m cells for a 10m scene, 0.01m for 0.1m scene, etc.
+  const cellSize = bbox
+    ? Math.pow(10, Math.floor(Math.log10(Math.max(bbox.maxX - bbox.minX, bbox.maxZ - bbox.minZ) / 10)))
+    : 1
+
+  return (
+    <Grid
+      position={[0, 0, 0]}
+      infiniteGrid
+      cellSize={cellSize}
+      cellThickness={0.4}
+      cellColor="#2a2a2a"
+      sectionSize={cellSize * 5}
+      sectionThickness={0.8}
+      sectionColor="#3d3d3d"
+      fadeDistance={Math.max(cellSize * 200, 50)}
+      fadeStrength={1.5}
+    />
+  )
+}
 
 export default function ViewerCanvas() {
   const { streamStatus } = useViewer()
@@ -33,6 +56,7 @@ export default function ViewerCanvas() {
         <Suspense fallback={null}>
           <PointCloud flyCameraRef={flyCameraRef} />
           <MeshOverlay />
+          {isActive && <SceneGrid />}
         </Suspense>
 
         <FlyCamera ref={flyCameraRef} />

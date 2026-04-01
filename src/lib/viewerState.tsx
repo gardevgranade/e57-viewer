@@ -3,6 +3,7 @@ import type { BoundingBox } from '../lib/jobStore.js'
 
 export type StreamStatus = 'idle' | 'uploading' | 'streaming' | 'done' | 'error'
 export type ColorMode = 'rgb' | 'intensity' | 'height'
+export type Quaternion4 = [number, number, number, number]
 
 export interface ViewerState {
   jobId: string | null
@@ -19,6 +20,8 @@ export interface ViewerState {
   pointSize: number
   colorMode: ColorMode
   showMesh: boolean
+  /** Object orientation as a unit quaternion [x, y, z, w]. Identity = [0,0,0,1]. */
+  objectQuaternion: Quaternion4
 }
 
 export interface ViewerActions {
@@ -37,6 +40,32 @@ export interface ViewerActions {
   setPointSize: (size: number) => void
   setColorMode: (mode: ColorMode) => void
   setShowMesh: (show: boolean) => void
+  /** Pre-multiply current orientation by a ±90° rotation around one axis. */
+  applyObjectRotation: (axis: 'x' | 'y' | 'z', angleDeg: number) => void
+  resetObjectRotation: () => void
+}
+
+const IDENTITY_QUAT: Quaternion4 = [0, 0, 0, 1]
+
+/** Multiply two unit quaternions (Hamilton product). */
+function multiplyQuaternions(a: Quaternion4, b: Quaternion4): Quaternion4 {
+  const [ax, ay, az, aw] = a
+  const [bx, by, bz, bw] = b
+  return [
+    aw * bx + ax * bw + ay * bz - az * by,
+    aw * by - ax * bz + ay * bw + az * bx,
+    aw * bz + ax * by - ay * bx + az * bw,
+    aw * bw - ax * bx - ay * by - az * bz,
+  ]
+}
+
+function axisAngleQuat(axis: 'x' | 'y' | 'z', angleDeg: number): Quaternion4 {
+  const half = (angleDeg * Math.PI) / 360 // half-angle in radians
+  const s = Math.sin(half)
+  const c = Math.cos(half)
+  if (axis === 'x') return [s, 0, 0, c]
+  if (axis === 'y') return [0, s, 0, c]
+  return [0, 0, s, c]
 }
 
 const initialState: ViewerState = {
@@ -53,6 +82,7 @@ const initialState: ViewerState = {
   pointSize: 1.5,
   colorMode: 'rgb',
   showMesh: false,
+  objectQuaternion: IDENTITY_QUAT,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -92,6 +122,12 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
       setPointSize: (pointSize) => setState((s) => ({ ...s, pointSize })),
       setColorMode: (colorMode) => setState((s) => ({ ...s, colorMode })),
       setShowMesh: (showMesh) => setState((s) => ({ ...s, showMesh })),
+      applyObjectRotation: (axis, angleDeg) =>
+        setState((s) => ({
+          ...s,
+          objectQuaternion: multiplyQuaternions(axisAngleQuat(axis, angleDeg), s.objectQuaternion),
+        })),
+      resetObjectRotation: () => setState((s) => ({ ...s, objectQuaternion: IDENTITY_QUAT })),
     }),
     [],
   )
