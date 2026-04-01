@@ -43,19 +43,25 @@ export default function PointCloud({ flyCameraRef }: PointCloudProps) {
   const groupRef = useRef<THREE.Group>(null!)
   const { camera } = useThree()
 
-  // Apply object quaternion imperatively to avoid R3F type issues
+  // Apply object quaternion imperatively.
+  // Base rotation: -90° around X converts Z-up E57 data → Y-up world space.
+  // User objectQuaternion is applied on top (userQ * baseQ = base first, then user).
   useEffect(() => {
     if (!groupRef.current) return
-    groupRef.current.quaternion.set(...objectQuaternion)
+    const baseQ = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2) // -90° X
+    const userQ = new THREE.Quaternion(...objectQuaternion)
+    groupRef.current.quaternion.copy(userQ.multiply(baseQ))
   }, [objectQuaternion])
 
-  // Ground-snap + center: position computed from live bbox state
+  // Ground-snap + center for Z-up data converted to Y-up world.
+  // After -90°X rotation: dataX→worldX, dataZ→worldY, dataY→world(-Z)
+  // So: center on dataX/dataY axes, snap dataZ floor (minZ) to worldY=0.
   const groupPosition = useMemo<[number, number, number]>(() => {
     if (!bbox) return [0, 0, 0]
     return [
-      -((bbox.minX + bbox.maxX) / 2),
-      -bbox.minY,
-      -((bbox.minZ + bbox.maxZ) / 2),
+      -((bbox.minX + bbox.maxX) / 2),  // center data X
+      -bbox.minZ,                        // snap data floor (minZ) to world Y=0
+      (bbox.minY + bbox.maxY) / 2,      // center data Y (becomes world -Z, so +centerY)
     ]
   }, [bbox])
 
@@ -288,23 +294,24 @@ export default function PointCloud({ flyCameraRef }: PointCloudProps) {
           hasIntensity: msg.hasIntensity,
         })
         es.close()
-        // Fly camera to fit the world-space (centered + ground-snapped) bounding box
+        // Fly camera to fit the world-space bounding box.
+        // After -90°X base rotation: data(X,Y,Z) → world(X, Z, -Y)
+        // World extents: X→[-halfX, halfX], Y→[0, zSpan] (floor at 0), Z→[-halfY, halfY]
         if (msg.bbox) {
-          const { minX, minY, minZ: bMinZ, maxX, maxY, maxZ: bMaxZ } = msg.bbox
+          const { minX, maxX, minY, maxY, minZ: bMinZ, maxZ: bMaxZ } = msg.bbox
           const halfX = (maxX - minX) / 2
-          const halfZ = (bMaxZ - bMinZ) / 2
-          const height = maxY - minY
-          // World-space box: centered on X/Z, bottom at Y=0
+          const halfY_data = (maxY - minY) / 2
+          const zSpan = bMaxZ - bMinZ
           const worldBox = new THREE.Box3(
-            new THREE.Vector3(-halfX, 0, -halfZ),
-            new THREE.Vector3(halfX, height, halfZ),
+            new THREE.Vector3(-halfX, 0, -halfY_data),
+            new THREE.Vector3(halfX, zSpan, halfY_data),
           )
           if (flyCameraRef.current) {
             flyCameraRef.current.fitToBox(worldBox)
           } else {
-            const span = Math.max(halfX * 2, height, halfZ * 2)
-            camera.position.set(0, -span * 1.2, span * 0.5)
-            camera.lookAt(0, height / 2, 0)
+            const span = Math.max(halfX * 2, zSpan, halfY_data * 2)
+            camera.position.set(span * 0.8, span * 0.6, span * 1.2)
+            camera.lookAt(0, zSpan / 2, 0)
           }
         }
         setDone({
