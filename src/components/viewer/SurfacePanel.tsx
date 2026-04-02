@@ -217,6 +217,7 @@ export default function SurfacePanel() {
   const [filterType, setFilterType] = useState<'all' | 'roof' | 'floor' | 'wall'>('all')
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
   const [editingGroupLabel, setEditingGroupLabel] = useState('')
+  const [showHideHint, setShowHideHint] = useState(false)
 
   // Ref map: surfaceId → DOM element for scroll-into-view
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -287,6 +288,7 @@ export default function SurfacePanel() {
         normal: d.normal,
       }))
       setSurfaces(picked)
+      if (isMesh && meshVisible) setShowHideHint(true)
     } finally {
       setDetecting(false)
     }
@@ -305,6 +307,7 @@ export default function SurfacePanel() {
         pointIndices: [], pointCount: d.pointCount, normal: d.normal,
       }))
       setSurfaces(picked)
+      if (meshVisible) setShowHideHint(true)
     } finally {
       setDetecting(false)
     }
@@ -556,6 +559,27 @@ export default function SurfacePanel() {
       {open && (
         <div style={{ overflowY: 'auto', padding: '0 12px 10px', flex: 1, minHeight: 0 }}>
         <>
+          {/* ── "Hide model?" suggestion after detection ── */}
+          {showHideHint && isMesh && meshVisible && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+              background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.35)',
+              borderRadius: 7, padding: '6px 8px',
+            }}>
+              <span style={{ fontSize: 11, color: '#a5b4fc', flex: 1 }}>
+                💡 Hide model to see surfaces clearly
+              </span>
+              <button onClick={() => { setMeshVisible(false); setShowHideHint(false) }}
+                style={{ padding: '2px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                  background: '#4f46e5', border: 'none', borderRadius: 5, color: '#fff' }}>
+                Hide
+              </button>
+              <button onClick={() => setShowHideHint(false)}
+                style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 13, padding: 0 }}>
+                ✕
+              </button>
+            </div>
+          )}
           {/* ── Filter pills + hide model ── */}
           {surfaces.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>

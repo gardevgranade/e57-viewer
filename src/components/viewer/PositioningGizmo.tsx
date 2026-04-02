@@ -13,6 +13,7 @@ export default function PositioningGizmo() {
     applyObjectRotation,
     meshObjectRef,
     measureActive, pickSurfaceMode,
+    meshVisible,
     fileType, streamStatus,
   } = useViewer()
 
@@ -25,7 +26,7 @@ export default function PositioningGizmo() {
     if (!isMesh) return
 
     const handler = (e: MouseEvent) => {
-      if (positioningMode || measureActive || pickSurfaceMode) return
+      if (positioningMode || measureActive || pickSurfaceMode || !meshVisible) return
 
       const rect = gl.domElement.getBoundingClientRect()
       const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
@@ -53,7 +54,7 @@ export default function PositioningGizmo() {
 
     gl.domElement.addEventListener('click', handler)
     return () => gl.domElement.removeEventListener('click', handler)
-  }, [gl, camera, scene, positioningMode, measureActive, pickSurfaceMode, fileType, streamStatus, setModelClickPos, meshObjectRef])
+  }, [gl, camera, scene, positioningMode, measureActive, pickSurfaceMode, meshVisible, fileType, streamStatus, setModelClickPos, meshObjectRef])
 
   // Compute bbox (always, but only used when positioningMode)
   const obj = meshObjectRef.current
