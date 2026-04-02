@@ -26,6 +26,12 @@ export interface SurfaceGroup {
   parentId: string | null
 }
 
+export interface SavedMeasurement {
+  id: string
+  points: Array<{ x: number; y: number; z: number }>
+  isClosed: boolean
+}
+
 export interface ViewerState {
   jobId: string | null
   fileName: string | null
@@ -71,6 +77,7 @@ export interface ViewerState {
   lassoSelectedIds: string[] | null
   lassoTriangleMode: boolean
   lassoSelectedTriangles: Array<{ surfaceId: string; triangleIndices: number[] }> | null
+  savedMeasurements: SavedMeasurement[]
 }
 
 export interface ViewerActions {
@@ -127,6 +134,9 @@ export interface ViewerActions {
   setLassoTriangleMode: (v: boolean) => void
   setLassoSelectedTriangles: (v: Array<{ surfaceId: string; triangleIndices: number[] }> | null) => void
   updateSurfaceGeometry: (id: string, worldTriangles: Float32Array) => void
+  addMeasurement: (m: SavedMeasurement) => void
+  removeMeasurement: (id: string) => void
+  updateMeasurement: (id: string, points: Array<{ x: number; y: number; z: number }>, isClosed: boolean) => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
     matrixWorld: THREE.Matrix4
@@ -198,6 +208,7 @@ const initialState: ViewerState = {
   lassoSelectedIds: null,
   lassoTriangleMode: false,
   lassoSelectedTriangles: null,
+  savedMeasurements: [],
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -381,6 +392,17 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
             ),
           }
         }),
+      addMeasurement: (m) =>
+        setState(s => ({ ...s, savedMeasurements: [...s.savedMeasurements, m] })),
+      removeMeasurement: (id) =>
+        setState(s => ({ ...s, savedMeasurements: s.savedMeasurements.filter(m => m.id !== id) })),
+      updateMeasurement: (id, points, isClosed) =>
+        setState(s => ({
+          ...s,
+          savedMeasurements: s.savedMeasurements.map(m =>
+            m.id === id ? { ...m, points, isClosed } : m,
+          ),
+        })),
     }},
     [],
   )
