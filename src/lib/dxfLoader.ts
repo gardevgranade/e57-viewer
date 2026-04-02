@@ -10,6 +10,19 @@ export function parseDxfToThree(dxfText: string): THREE.Group {
   const dxf = parser.parseSync(dxfText)
   if (!dxf) throw new Error('Failed to parse DXF file')
 
+  // Diagnostic: log entity type counts
+  if (dxf.entities) {
+    const counts = new Map<string, number>()
+    for (const e of dxf.entities) {
+      counts.set(e.type, (counts.get(e.type) ?? 0) + 1)
+    }
+    console.log('[DXF] Entity types:', Object.fromEntries(counts))
+    console.log('[DXF] Total entities:', dxf.entities.length)
+    if (dxf.blocks) {
+      console.log('[DXF] Blocks:', Object.keys(dxf.blocks).join(', '))
+    }
+  }
+
   const root = new THREE.Group()
 
   // Collect layer colors
@@ -225,8 +238,16 @@ export function parseDxfToThree(dxfText: string): THREE.Group {
     processEntities(dxf.entities)
   }
 
+  // Post-process: detect and remove "origin fan" lines
+  // If many line segments share a common endpoint far from the centroid, remove them
+  for (const [color, verts] of linesByColor) {
+    const filtered = filterOriginFan(verts)
+    linesByColor.set(color, filtered)
+  }
+
   // Build batched line geometry (LineSegments for performance)
   for (const [color, verts] of linesByColor) {
+    if (verts.length === 0) continue
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
     root.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color })))
@@ -249,6 +270,76 @@ function toVec3(v: any): THREE.Vector3 {
 
 // Bright default for dark backgrounds
 const DEFAULT_LINE_COLOR = 0x8cb4d4
+
+/**
+ * Detect and remove "origin fan" artifacts.
+ * When many line segments share a common endpoint (within a small tolerance),
+ * and those segments are much longer than the median segment, remove them.
+ * verts is a flat array: [x1,y1,z1, x2,y2,z2, x1,y1,z1, x2,y2,z2, ...]
+ */
+function filterOriginFan(verts: number[]): number[] {
+  const segCount = verts.length / 6
+  if (segCount < 20) return verts // too few lines to have a fan problem
+
+  // Count how often each endpoint appears (quantized to grid)
+  const GRID = 0.01
+  const endpointCounts = new Map<string, number>()
+  const quantize = (x: number) => Math.round(x / GRID) * GRID
+
+  for (let i = 0; i < verts.length; i += 6) {
+    const k1 = `${quantize(verts[i])},${quantize(verts[i + 1])},${quantize(verts[i + 2])}`
+    const k2 = `${quantize(verts[i + 3])},${quantize(verts[i + 4])},${quantize(verts[i + 5])}`
+    endpointCounts.set(k1, (endpointCounts.get(k1) ?? 0) + 1)
+    endpointCounts.set(k2, (endpointCounts.get(k2) ?? 0) + 1)
+  }
+
+  // Find the most common endpoint
+  let maxKey = ''
+  let maxCount = 0
+  for (const [k, c] of endpointCounts) {
+    if (c > maxCount) { maxCount = c; maxKey = k }
+  }
+
+  // If a single point is shared by >15% of all segments, it's likely a fan artifact
+  const fanThreshold = Math.max(10, segCount * 0.15)
+  if (maxCount < fanThreshold) return verts
+
+  // Calculate median segment length for non-fan lines
+  const fanParts = maxKey.split(',').map(Number)
+  const fanPt = new THREE.Vector3(fanParts[0], fanParts[1], fanParts[2])
+
+  const lengths: number[] = []
+  for (let i = 0; i < verts.length; i += 6) {
+    const a = new THREE.Vector3(verts[i], verts[i + 1], verts[i + 2])
+    const b = new THREE.Vector3(verts[i + 3], verts[i + 4], verts[i + 5])
+    lengths.push(a.distanceTo(b))
+  }
+  lengths.sort((a, b) => a - b)
+  const medianLen = lengths[Math.floor(lengths.length / 2)]
+
+  // Remove segments that touch the fan point AND are significantly longer than median
+  const longThreshold = medianLen * 3
+  const result: number[] = []
+  let removed = 0
+
+  for (let i = 0; i < verts.length; i += 6) {
+    const a = new THREE.Vector3(verts[i], verts[i + 1], verts[i + 2])
+    const b = new THREE.Vector3(verts[i + 3], verts[i + 4], verts[i + 5])
+    const len = a.distanceTo(b)
+
+    const touchesFan = a.distanceTo(fanPt) < GRID * 2 || b.distanceTo(fanPt) < GRID * 2
+    if (touchesFan && len > longThreshold) {
+      removed++
+      continue
+    }
+    result.push(verts[i], verts[i + 1], verts[i + 2], verts[i + 3], verts[i + 4], verts[i + 5])
+  }
+
+  if (removed > 0) {
+    console.log(`[DXF] Removed ${removed} fan lines converging at (${fanPt.x.toFixed(2)}, ${fanPt.y.toFixed(2)}, ${fanPt.z.toFixed(2)})`)
+  }
+  return result
+}
 
 /**
  * Convert AutoCAD Color Index (ACI) to hex RGB.
