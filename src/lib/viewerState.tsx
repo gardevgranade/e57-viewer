@@ -47,6 +47,7 @@ export interface ViewerState {
   fileType: string | null
   /** Whether the measurement tool is active */
   measureActive: boolean
+  measureSnap: boolean
   surfaces: PickedSurface[]
   surfaceGroups: SurfaceGroup[]
   surfaceColorMode: boolean
@@ -93,6 +94,7 @@ export interface ViewerActions {
   resetObjectRotation: () => void
   setFileType: (fileType: string | null) => void
   setMeasureActive: (active: boolean) => void
+  setMeasureSnap: (v: boolean) => void
   setSurfaces: (s: PickedSurface[]) => void
   updateSurface: (id: string, patch: Partial<Pick<PickedSurface, 'label' | 'color' | 'visible' | 'groupId'>>) => void
   addSurface: (s: PickedSurface) => void
@@ -172,6 +174,7 @@ const initialState: ViewerState = {
   objectQuaternion: IDENTITY_QUAT,
   fileType: null,
   measureActive: false,
+  measureSnap: true,
   surfaces: [],
   surfaceGroups: [],
   surfaceColorMode: false,
@@ -264,6 +267,7 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
       resetObjectRotation: () => setState((s) => ({ ...s, objectQuaternion: IDENTITY_QUAT })),
       setFileType: (fileType) => setState((s) => ({ ...s, fileType })),
       setMeasureActive: (measureActive) => setState((s) => ({ ...s, measureActive })),
+      setMeasureSnap: (measureSnap) => setState((s) => ({ ...s, measureSnap })),
       setSurfaces: (surfaces) =>
         setStateUndoable(s => ({ ...s, surfaces, surfaceColorMode: surfaces.length > 0 })),
       updateSurface: (id, patch) =>

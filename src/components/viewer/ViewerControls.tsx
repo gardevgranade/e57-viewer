@@ -17,6 +17,8 @@ export default function ViewerControls() {
     setShowMesh,
     setMeasureActive,
     errorMessage,
+    measureSnap,
+    setMeasureSnap,
   } = useViewer()
 
   const isMesh = fileType && fileType !== 'e57'
@@ -161,8 +163,20 @@ export default function ViewerControls() {
 
       {/* Measure hint bar */}
       {measureActive && (
-        <div className="pointer-events-none rounded-xl border border-orange-500/20 bg-orange-500/10 px-4 py-2 text-xs text-orange-300 backdrop-blur-sm text-center">
-          Click anywhere on the model to place measurement points · <span className="opacity-60">Esc to clear</span>
+        <div className="pointer-events-auto rounded-xl border border-orange-500/20 bg-orange-500/10 px-4 py-2 text-xs text-orange-300 backdrop-blur-sm flex items-center justify-center gap-3">
+          <span>Click to place points · <span className="opacity-60">Esc to clear</span></span>
+          <button
+            onClick={() => setMeasureSnap(!measureSnap)}
+            className={[
+              'flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition border',
+              measureSnap
+                ? 'bg-yellow-400/20 border-yellow-400/50 text-yellow-300'
+                : 'bg-white/5 border-white/20 text-white/40',
+            ].join(' ')}
+            title="Toggle snap to surface edges & corners"
+          >
+            🧲 {measureSnap ? 'Snap On' : 'Snap Off'}
+          </button>
         </div>
       )}
     </div>
