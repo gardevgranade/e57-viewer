@@ -97,24 +97,24 @@ export default function DragDropZone() {
 
   if (isUploading) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm backdrop-blur-sm">
-        <SpinnerIcon className="h-4 w-4 shrink-0 animate-spin text-teal-400" />
-        <span className="truncate max-w-[200px] text-white/70">Uploading {fileName}…</span>
-        <span className="text-white/40">{formatBytes(fileSize ?? 0)}</span>
+      <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs backdrop-blur-sm">
+        <SpinnerIcon className="h-3 w-3 shrink-0 animate-spin text-teal-400" />
+        <span className="truncate max-w-[160px] text-white/70">{fileName}</span>
+        <span className="text-white/30">{formatBytes(fileSize ?? 0)}</span>
       </div>
     )
   }
 
   if (isActive) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm backdrop-blur-sm">
-        <span className="truncate max-w-[200px] text-white/80">{fileName}</span>
-        <span className="text-white/40">{formatBytes(fileSize ?? 0)}</span>
+      <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs backdrop-blur-sm">
+        <span className="truncate max-w-[160px] text-white/70">{fileName}</span>
+        <span className="text-white/25">{formatBytes(fileSize ?? 0)}</span>
         <button
           onClick={reset}
-          className="ml-auto rounded-md px-2 py-1 text-xs text-white/50 hover:bg-white/10 hover:text-white transition"
+          className="ml-1 rounded px-1.5 py-0.5 text-[10px] text-white/40 hover:bg-white/10 hover:text-white/70 transition"
         >
-          Load new file
+          ✕ New
         </button>
       </div>
     )

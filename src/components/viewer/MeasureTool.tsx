@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import { Html, Line } from '@react-three/drei'
 import { useViewer } from '../../lib/viewerState.js'
 import type { PickedSurface } from '../../lib/viewerState.js'
+import { useUnits } from '../../lib/units.js'
 import type { FlyCameraHandle } from './FlyCamera.js'
 
 interface MeasurePoint { x: number; y: number; z: number }
@@ -20,18 +21,6 @@ function dist3(a: MeasurePoint, b: MeasurePoint) {
 
 function mid3(a: MeasurePoint, b: MeasurePoint): [number, number, number] {
   return [(a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2]
-}
-
-function fmt(m: number) {
-  if (m < 0.001) return `${(m * 1000).toFixed(0)} mm`
-  if (m < 1)     return `${(m * 100).toFixed(1)} cm`
-  return `${m.toFixed(3)} m`
-}
-
-function fmtArea(m2: number) {
-  if (m2 < 0.0001) return `${(m2 * 1e6).toFixed(0)} mm²`
-  if (m2 < 1)      return `${(m2 * 1e4).toFixed(2)} cm²`
-  return `${m2.toFixed(4)} m²`
 }
 
 function polygonArea3D(pts: MeasurePoint[]): number {
@@ -164,6 +153,8 @@ function findSnap(
 
 export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const { measureActive, measureSnap, bbox, measureTraceSerial, measureTracePts, setMeasureActive, surfaces } = useViewer()
+  const { fmtLength, fmtArea } = useUnits()
+  const fmt = fmtLength
   const { camera, gl, scene } = useThree()
   const [points, setPoints] = useState<MeasurePoint[]>([])
   const [isClosed, setIsClosed] = useState(false)

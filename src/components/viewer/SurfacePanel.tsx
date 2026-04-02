@@ -6,13 +6,8 @@ import type { PickedSurface, SurfaceGroup } from '../../lib/viewerState.js'
 import { detectSurfaces } from '../../lib/surfaceDetect.js'
 import { detectMeshSurfaces, splitSurfaceTriangles } from '../../lib/meshSurfaceDetect.js'
 import { extractBoundaryPolygon } from '../../lib/surfaceBoundary.js'
+import { useUnits } from '../../lib/units.js'
 import * as THREE from 'three'
-
-function fmtArea(m2: number) {
-  if (m2 < 0.01) return `${(m2 * 1e4).toFixed(1)} cm²`
-  if (m2 < 10000) return `${m2.toFixed(2)} m²`
-  return `${(m2 / 10000).toFixed(2)} ha`
-}
 
 function groupTotalArea(groupId: string, surfaceGroups: SurfaceGroup[], surfaces: PickedSurface[]): number {
   // Collect all descendant group IDs (BFS)
@@ -53,6 +48,7 @@ function swapType(label: string): string {
 }
 
 function SurfaceRow({ surf, groups, selected, onUpdate, onRemove, onSplit, onTrace, onHover, onSelect, param, onRef }: SurfaceRowProps) {
+  const { fmtArea } = useUnits()
   const isRoofOrFloor = /^(roof|floor)/i.test(surf.label)
   return (
     <div
@@ -212,6 +208,7 @@ export default function SurfacePanel() {
     lassoMode, setLassoMode,
   } = useViewer()
 
+  const { fmtArea } = useUnits()
   const [detecting, setDetecting] = useState(false)
   const [open, setOpen] = useState(true)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
