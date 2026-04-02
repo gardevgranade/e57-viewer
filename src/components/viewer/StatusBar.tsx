@@ -11,7 +11,7 @@ export default function StatusBar() {
   const isMesh = fileType && fileType !== 'e57'
 
   return (
-    <div className="flex h-6 items-center justify-between border-t border-white/[0.06] bg-[#0c1017] px-3 text-[10px] text-white/40 select-none">
+    <div className="flex h-full w-full items-center justify-between px-3 text-[10px] text-white/40 select-none">
       {/* Left: file info */}
       <div className="flex items-center gap-3">
         {fileName && (

@@ -28,6 +28,7 @@ import ShortcutsOverlay from './ShortcutsOverlay.js'
 import CameraViewBar from './CameraViewBar.js'
 import CameraViewBridge, { triggerCameraView, triggerScreenshot } from './CameraViewBridge.js'
 import FPSMonitor, { useFPSCallback } from './FPSMonitor.js'
+import DragDropZone from './DragDropZone.js'
 import WelcomeScreen from './WelcomeScreen.js'
 
 function SceneGrid() {
@@ -197,7 +198,14 @@ export default function ViewerCanvas() {
         </div>
 
         {/* Status bar */}
-        <StatusBar />
+        <div className="flex h-7 shrink-0 items-center border-t border-white/[0.06] bg-[#0c1017]">
+          <div className="flex-1">
+            <StatusBar />
+          </div>
+          <div className="shrink-0 pr-2">
+            <DragDropZone />
+          </div>
+        </div>
       </div>
 
       {/* Shortcuts overlay */}
