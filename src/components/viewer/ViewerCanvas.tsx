@@ -14,6 +14,9 @@ import SurfacePanel from './SurfacePanel.js'
 import SurfaceMeshOverlay from './SurfaceMeshOverlay.js'
 import SurfacePicker from './SurfacePicker.js'
 import SurfaceTooltip from './SurfaceTooltip.js'
+import PositioningGizmo from './PositioningGizmo.js'
+import ModelContextCard from './ModelContextCard.js'
+import PositioningPanel from './PositioningPanel.js'
 
 function SceneGrid() {
   const { bbox } = useViewer()
@@ -72,6 +75,7 @@ export default function ViewerCanvas() {
           <SurfaceMeshOverlay />
           <MeasureTool flyCameraRef={flyCameraRef} />
           <SurfacePicker flyCameraRef={flyCameraRef} />
+          <PositioningGizmo />
         </Suspense>
 
         <FlyCamera ref={flyCameraRef} />
@@ -87,6 +91,8 @@ export default function ViewerCanvas() {
       <ViewerControls />
       <SurfacePanel />
       <SurfaceTooltip />
+      <ModelContextCard />
+      <PositioningPanel />
     </div>
   )
 }

@@ -87,6 +87,7 @@ function SurfaceOverlayMesh({
         geometry={geometry}
         material={material}
         renderOrder={2}
+        userData={{ isSurfaceOverlay: true }}
         onPointerOver={(e) => { e.stopPropagation(); onHover(id) }}
         onPointerOut={() => onHover(null)}
         onClick={(e) => { e.stopPropagation(); onSelect(id, { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY }) }}

@@ -17,8 +17,6 @@ export default function ViewerControls() {
     setShowMesh,
     setMeasureActive,
     errorMessage,
-    applyObjectRotation,
-    resetObjectRotation,
   } = useViewer()
 
   const isMesh = fileType && fileType !== 'e57'
@@ -30,44 +28,6 @@ export default function ViewerControls() {
 
   return (
     <>
-      {/* Rotation panel — top-left overlay */}
-      {isDone && (
-        <div className="pointer-events-auto absolute left-4 top-4 rounded-xl border border-white/10 bg-black/70 px-4 py-3 backdrop-blur-sm">
-          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-white/40">
-            Orientation
-          </p>
-          <div className="grid grid-cols-3 gap-1.5">
-            {(['x', 'y', 'z'] as const).map((axis) => (
-              <div key={axis} className="flex flex-col gap-1">
-                <span className={`text-center text-[10px] font-bold ${axisColor(axis)}`}>
-                  {axis.toUpperCase()}
-                </span>
-                <button
-                  onClick={() => applyObjectRotation(axis, 90)}
-                  className="rounded-md bg-white/10 px-2 py-1 text-xs text-white/80 transition hover:bg-white/20 active:scale-95"
-                  title={`Rotate +90° around ${axis.toUpperCase()}`}
-                >
-                  +90°
-                </button>
-                <button
-                  onClick={() => applyObjectRotation(axis, -90)}
-                  className="rounded-md bg-white/10 px-2 py-1 text-xs text-white/80 transition hover:bg-white/20 active:scale-95"
-                  title={`Rotate −90° around ${axis.toUpperCase()}`}
-                >
-                  −90°
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={resetObjectRotation}
-            className="mt-2 w-full rounded-md bg-white/5 px-2 py-1 text-[11px] text-white/50 transition hover:bg-white/10 hover:text-white/80"
-          >
-            Reset
-          </button>
-        </div>
-      )}
-
       <div className="pointer-events-none absolute bottom-0 left-0 right-0 flex flex-col gap-3 p-4">
       {/* Error banner */}
       {streamStatus === 'error' && errorMessage && (
@@ -208,12 +168,6 @@ export default function ViewerControls() {
     </div>
     </>
   )
-}
-
-function axisColor(axis: 'x' | 'y' | 'z') {
-  if (axis === 'x') return 'text-red-400'
-  if (axis === 'y') return 'text-green-400'
-  return 'text-blue-400'
 }
 
 function RulerIcon({ className }: { className?: string }) {

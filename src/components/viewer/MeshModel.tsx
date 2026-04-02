@@ -126,7 +126,7 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
         setDone({ totalPoints: 0, bbox, hasColor: false, hasIntensity: false })
 
         // Expose the loaded object for surface detection
-        meshObjectRef.current = sceneRef.current
+        meshObjectRef.current = groupRef.current
 
         if (flyCameraRef.current) {
           flyCameraRef.current.fitToBox(worldBox)
@@ -147,13 +147,19 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
   }, [jobId, fileType, streamStatus, camera, setDone, setError, flyCameraRef])
 
   // Apply objectQuaternion on top of the base rotation
-  const { objectQuaternion } = useViewer()
+  const { objectQuaternion, objectYOffset } = useViewer()
   useEffect(() => {
     if (!groupRef.current) return
     const baseQ = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2)
     const userQ = new THREE.Quaternion(...objectQuaternion)
     groupRef.current.quaternion.copy(userQ.multiply(baseQ))
   }, [objectQuaternion])
+
+  useEffect(() => {
+    if (!groupRef.current) return
+    const [x, y, z] = positionRef.current
+    groupRef.current.position.set(x, y + objectYOffset, z)
+  }, [objectYOffset])
 
   // Toggle mesh visibility
   useEffect(() => {

@@ -61,6 +61,9 @@ export interface ViewerState {
   measureTracePts: Array<{ x: number; y: number; z: number }>
   canUndo: boolean
   canRedo: boolean
+  positioningMode: boolean
+  objectYOffset: number
+  modelClickPos: { x: number; y: number } | null
 }
 
 export interface ViewerActions {
@@ -104,6 +107,10 @@ export interface ViewerActions {
   traceSurfaceMeasure: (pts: Array<{ x: number; y: number; z: number }>) => void
   undo: () => void
   redo: () => void
+  setPositioningMode: (v: boolean) => void
+  setObjectYOffset: (v: number) => void
+  setModelClickPos: (pos: { x: number; y: number } | null) => void
+  moveModelToGround: () => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
     matrixWorld: THREE.Matrix4
@@ -165,6 +172,9 @@ const initialState: ViewerState = {
   measureTracePts: [],
   canUndo: false,
   canRedo: false,
+  positioningMode: false,
+  objectYOffset: 0,
+  modelClickPos: null,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -318,6 +328,15 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
           historyRef.current = [...historyRef.current.slice(-49), { surfaces: s.surfaces, surfaceGroups: s.surfaceGroups }]
           return { ...s, ...next, canUndo: true, canRedo: futureRef.current.length > 0 }
         }),
+      setPositioningMode: (positioningMode) => setState((s) => ({ ...s, positioningMode })),
+      setObjectYOffset: (objectYOffset) => setState((s) => ({ ...s, objectYOffset })),
+      setModelClickPos: (modelClickPos) => setState((s) => ({ ...s, modelClickPos })),
+      moveModelToGround: () => {
+        const obj = meshObjectRef.current
+        if (!obj) return
+        const bbox = new THREE.Box3().setFromObject(obj)
+        setState(s => ({ ...s, objectYOffset: s.objectYOffset - bbox.min.y }))
+      },
     }},
     [],
   )
