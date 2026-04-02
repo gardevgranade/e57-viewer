@@ -6,7 +6,7 @@ import { useViewer } from '../../lib/viewerState.js'
 
 /** Renders a semi-transparent coloured overlay mesh for each detected surface (mesh mode only). */
 export default function SurfaceMeshOverlay() {
-  const { surfaces, surfaceColorMode, fileType, hoveredSurfaceId, setHoveredSurfaceId, setSelectedSurfaceId } = useViewer()
+  const { surfaces, surfaceColorMode, fileType, hoveredSurfaceId, setHoveredSurfaceId, setSelectedSurface } = useViewer()
 
   const isMesh = fileType && fileType !== 'e57'
   if (!surfaceColorMode || !isMesh) return null
@@ -23,7 +23,7 @@ export default function SurfaceMeshOverlay() {
             triangles={s.worldTriangles!}
             hovered={s.id === hoveredSurfaceId}
             onHover={setHoveredSurfaceId}
-            onSelect={setSelectedSurfaceId}
+            onSelect={setSelectedSurface}
           />
         ))}
     </>
@@ -43,7 +43,7 @@ function SurfaceOverlayMesh({
   triangles: Float32Array
   hovered: boolean
   onHover: (id: string | null) => void
-  onSelect: (id: string | null) => void
+  onSelect: (id: string | null, pos?: { x: number; y: number }) => void
 }) {
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
@@ -72,7 +72,7 @@ function SurfaceOverlayMesh({
         renderOrder={2}
         onPointerOver={(e) => { e.stopPropagation(); onHover(id) }}
         onPointerOut={() => onHover(null)}
-        onClick={(e) => { e.stopPropagation(); onSelect(id) }}
+        onClick={(e) => { e.stopPropagation(); onSelect(id, { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY }) }}
       />
       {hovered && (
         <mesh geometry={geometry} renderOrder={3}>

@@ -53,6 +53,7 @@ export interface ViewerState {
   meshVisible: boolean
   hoveredSurfaceId: string | null
   selectedSurfaceId: string | null
+  selectedSurfacePos: { x: number; y: number } | null
   /** When serial changes, MeasureTool will pre-populate with these points */
   measureTraceSerial: number
   measureTracePts: Array<{ x: number; y: number; z: number }>
@@ -92,6 +93,7 @@ export interface ViewerActions {
   setMeshVisible: (v: boolean) => void
   setHoveredSurfaceId: (id: string | null) => void
   setSelectedSurfaceId: (id: string | null) => void
+  setSelectedSurface: (id: string | null, pos?: { x: number; y: number }) => void
   traceSurfaceMeasure: (pts: Array<{ x: number; y: number; z: number }>) => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
@@ -148,6 +150,7 @@ const initialState: ViewerState = {
   meshVisible: true,
   hoveredSurfaceId: null,
   selectedSurfaceId: null,
+  selectedSurfacePos: null,
   measureTraceSerial: 0,
   measureTracePts: [],
 }
@@ -247,7 +250,9 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
       setPickSurfaceMode: (pickSurfaceMode) => setState((s) => ({ ...s, pickSurfaceMode })),
       setMeshVisible: (meshVisible) => setState((s) => ({ ...s, meshVisible })),
       setHoveredSurfaceId: (hoveredSurfaceId) => setState((s) => ({ ...s, hoveredSurfaceId })),
-      setSelectedSurfaceId: (selectedSurfaceId) => setState((s) => ({ ...s, selectedSurfaceId })),
+      setSelectedSurfaceId: (selectedSurfaceId) => setState((s) => ({ ...s, selectedSurfaceId, selectedSurfacePos: null })),
+      setSelectedSurface: (selectedSurfaceId, selectedSurfacePos?) =>
+        setState((s) => ({ ...s, selectedSurfaceId, selectedSurfacePos: selectedSurfacePos ?? null })),
       traceSurfaceMeasure: (pts) =>
         setState((s) => ({ ...s, measureTracePts: pts, measureTraceSerial: s.measureTraceSerial + 1 })),
     }),

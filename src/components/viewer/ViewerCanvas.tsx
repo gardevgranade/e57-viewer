@@ -13,6 +13,7 @@ import FlyCamera, { type FlyCameraHandle } from './FlyCamera.js'
 import SurfacePanel from './SurfacePanel.js'
 import SurfaceMeshOverlay from './SurfaceMeshOverlay.js'
 import SurfacePicker from './SurfacePicker.js'
+import SurfaceTooltip from './SurfaceTooltip.js'
 
 function SceneGrid() {
   const { bbox } = useViewer()
@@ -85,6 +86,7 @@ export default function ViewerCanvas() {
 
       <ViewerControls />
       <SurfacePanel />
+      <SurfaceTooltip />
     </div>
   )
 }
