@@ -51,6 +51,7 @@ export interface ViewerState {
   surfaceColorMode: boolean
   pickSurfaceMode: boolean
   meshVisible: boolean
+  hoveredSurfaceId: string | null
   /** When serial changes, MeasureTool will pre-populate with these points */
   measureTraceSerial: number
   measureTracePts: Array<{ x: number; y: number; z: number }>
@@ -88,6 +89,7 @@ export interface ViewerActions {
   setSurfaceColorMode: (v: boolean) => void
   setPickSurfaceMode: (v: boolean) => void
   setMeshVisible: (v: boolean) => void
+  setHoveredSurfaceId: (id: string | null) => void
   traceSurfaceMeasure: (pts: Array<{ x: number; y: number; z: number }>) => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
@@ -142,6 +144,7 @@ const initialState: ViewerState = {
   surfaceColorMode: false,
   pickSurfaceMode: false,
   meshVisible: true,
+  hoveredSurfaceId: null,
   measureTraceSerial: 0,
   measureTracePts: [],
 }
@@ -240,6 +243,7 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
       setSurfaceColorMode: (surfaceColorMode) => setState((s) => ({ ...s, surfaceColorMode })),
       setPickSurfaceMode: (pickSurfaceMode) => setState((s) => ({ ...s, pickSurfaceMode })),
       setMeshVisible: (meshVisible) => setState((s) => ({ ...s, meshVisible })),
+      setHoveredSurfaceId: (hoveredSurfaceId) => setState((s) => ({ ...s, hoveredSurfaceId })),
       traceSurfaceMeasure: (pts) =>
         setState((s) => ({ ...s, measureTracePts: pts, measureTraceSerial: s.measureTraceSerial + 1 })),
     }),

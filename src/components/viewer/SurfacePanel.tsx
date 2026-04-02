@@ -29,13 +29,22 @@ interface SurfaceRowProps {
   onRemove: (id: string) => void
   onSplit: (id: string) => void
   onTrace: (id: string) => void
+  onHover: (id: string | null) => void
   /** Extra info line shown below the main row (slope, elevation, etc.) */
   param?: string
 }
 
-function SurfaceRow({ surf, groups, onUpdate, onRemove, onSplit, onTrace, param }: SurfaceRowProps) {
+/** Swap the type prefix of a label: Roof ↔ Floor */
+function swapType(label: string): string {
+  if (/^roof/i.test(label)) return label.replace(/^roof/i, 'Floor')
+  if (/^floor/i.test(label)) return label.replace(/^floor/i, 'Roof')
+  return label
+}
+
+function SurfaceRow({ surf, groups, onUpdate, onRemove, onSplit, onTrace, onHover, param }: SurfaceRowProps) {
+  const isRoofOrFloor = /^(roof|floor)/i.test(surf.label)
   return (
-    <div>
+    <div onMouseEnter={() => onHover(surf.id)} onMouseLeave={() => onHover(null)}>
     <div style={{
       display: 'flex', alignItems: 'center', gap: 4,
       background: 'rgba(255,255,255,0.03)', borderRadius: param ? '5px 5px 0 0' : 5, padding: '3px 5px',
@@ -76,6 +85,17 @@ function SurfaceRow({ surf, groups, onUpdate, onRemove, onSplit, onTrace, param 
               : `${surf.pointCount} pts`
             : ''}
       </span>
+
+      {/* Type swap: Roof ↔ Floor */}
+      {isRoofOrFloor && (
+        <button
+          onClick={() => onUpdate(surf.id, { label: swapType(surf.label) })}
+          title={/^roof/i.test(surf.label) ? 'Change to Floor' : 'Change to Roof'}
+          style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1, flexShrink: 0 }}
+        >
+          {/^roof/i.test(surf.label) ? '⬇' : '⬆'}
+        </button>
+      )}
 
       {/* Group assignment dropdown */}
       {groups.length > 0 && (
@@ -165,6 +185,7 @@ export default function SurfacePanel() {
     pointCloudGeoRef, meshObjectRef,
     meshVisible, setMeshVisible,
     traceSurfaceMeasure,
+    setHoveredSurfaceId,
   } = useViewer()
 
   const [detecting, setDetecting] = useState(false)
@@ -498,7 +519,8 @@ export default function SurfacePanel() {
                               return (
                                 <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups}
                                   onUpdate={updateSurface} onRemove={removeSurface}
-                                  onSplit={handleSplit} onTrace={handleTrace} param={p} />
+                                  onSplit={handleSplit} onTrace={handleTrace}
+                                  onHover={setHoveredSurfaceId} param={p} />
                               )
                             })
                         }
@@ -539,7 +561,8 @@ export default function SurfacePanel() {
                       return (
                         <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups}
                           onUpdate={updateSurface} onRemove={removeSurface}
-                          onSplit={handleSplit} onTrace={handleTrace} param={p} />
+                          onSplit={handleSplit} onTrace={handleTrace}
+                          onHover={setHoveredSurfaceId} param={p} />
                       )
                     })}
                   </div>

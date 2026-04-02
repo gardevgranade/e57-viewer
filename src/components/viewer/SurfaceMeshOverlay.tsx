@@ -6,7 +6,7 @@ import { useViewer } from '../../lib/viewerState.js'
 
 /** Renders a semi-transparent coloured overlay mesh for each detected surface (mesh mode only). */
 export default function SurfaceMeshOverlay() {
-  const { surfaces, surfaceColorMode, fileType } = useViewer()
+  const { surfaces, surfaceColorMode, fileType, hoveredSurfaceId } = useViewer()
 
   const isMesh = fileType && fileType !== 'e57'
   if (!surfaceColorMode || !isMesh) return null
@@ -16,7 +16,12 @@ export default function SurfaceMeshOverlay() {
       {surfaces
         .filter((s) => s.visible && s.worldTriangles && s.worldTriangles.length > 0)
         .map((s) => (
-          <SurfaceOverlayMesh key={s.id} color={s.color} triangles={s.worldTriangles!} />
+          <SurfaceOverlayMesh
+            key={s.id}
+            color={s.color}
+            triangles={s.worldTriangles!}
+            hovered={s.id === hoveredSurfaceId}
+          />
         ))}
     </>
   )
@@ -25,9 +30,11 @@ export default function SurfaceMeshOverlay() {
 function SurfaceOverlayMesh({
   color,
   triangles,
+  hovered,
 }: {
   color: string
   triangles: Float32Array
+  hovered: boolean
 }) {
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
@@ -41,12 +48,21 @@ function SurfaceOverlayMesh({
       new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity: 0.45,
+        opacity: hovered ? 0.85 : 0.45,
         side: THREE.DoubleSide,
         depthWrite: false,
       }),
-    [color],
+    [color, hovered],
   )
 
-  return <mesh geometry={geometry} material={material} renderOrder={2} />
+  return (
+    <>
+      <mesh geometry={geometry} material={material} renderOrder={2} />
+      {hovered && (
+        <mesh geometry={geometry} renderOrder={3}>
+          <meshBasicMaterial color={color} wireframe transparent opacity={0.5} depthWrite={false} />
+        </mesh>
+      )}
+    </>
+  )
 }
