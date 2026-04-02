@@ -111,11 +111,19 @@ export default function DragDropZone() {
         <span className="truncate max-w-[160px] text-white/70">{fileName}</span>
         <span className="text-white/25">{formatBytes(fileSize ?? 0)}</span>
         <button
-          onClick={reset}
-          className="ml-1 rounded px-1.5 py-0.5 text-[10px] text-white/40 hover:bg-white/10 hover:text-white/70 transition"
+          onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
+          className="ml-1 flex items-center gap-1 rounded bg-teal-500/20 px-2 py-0.5 text-[10px] font-medium text-teal-300 hover:bg-teal-500/30 transition"
         >
-          ✕ New
+          <CloudUploadIcon className="h-3 w-3" /> Open File
         </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={ACCEPT_ATTR}
+          multiple
+          className="hidden"
+          onChange={onInputChange}
+        />
       </div>
     )
   }
