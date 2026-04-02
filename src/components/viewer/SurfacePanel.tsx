@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useViewer } from '../../lib/viewerState.js'
 import type { PickedSurface, SurfaceGroup } from '../../lib/viewerState.js'
 import { detectSurfaces } from '../../lib/surfaceDetect.js'
@@ -25,13 +25,16 @@ function groupTotalArea(groupId: string | null, surfaces: PickedSurface[]): numb
 interface SurfaceRowProps {
   surf: PickedSurface
   groups: SurfaceGroup[]
+  selected: boolean
   onUpdate: (id: string, patch: Partial<Pick<PickedSurface, 'label' | 'color' | 'visible' | 'groupId'>>) => void
   onRemove: (id: string) => void
   onSplit: (id: string) => void
   onTrace: (id: string) => void
   onHover: (id: string | null) => void
+  onSelect: (id: string | null) => void
   /** Extra info line shown below the main row (slope, elevation, etc.) */
   param?: string
+  onRef?: (el: HTMLDivElement | null) => void
 }
 
 /** Swap the type prefix of a label: Roof ↔ Floor */
@@ -41,13 +44,20 @@ function swapType(label: string): string {
   return label
 }
 
-function SurfaceRow({ surf, groups, onUpdate, onRemove, onSplit, onTrace, onHover, param }: SurfaceRowProps) {
+function SurfaceRow({ surf, groups, selected, onUpdate, onRemove, onSplit, onTrace, onHover, onSelect, param, onRef }: SurfaceRowProps) {
   const isRoofOrFloor = /^(roof|floor)/i.test(surf.label)
   return (
-    <div onMouseEnter={() => onHover(surf.id)} onMouseLeave={() => onHover(null)}>
+    <div
+      ref={onRef}
+      onMouseEnter={() => onHover(surf.id)}
+      onMouseLeave={() => onHover(null)}
+      onClick={() => onSelect(selected ? null : surf.id)}
+      style={{ cursor: 'pointer', borderRadius: 6, outline: selected ? `2px solid ${surf.color}` : 'none' }}
+    >
     <div style={{
       display: 'flex', alignItems: 'center', gap: 4,
-      background: 'rgba(255,255,255,0.03)', borderRadius: param ? '5px 5px 0 0' : 5, padding: '3px 5px',
+      background: selected ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.03)',
+      borderRadius: param ? '5px 5px 0 0' : 5, padding: '3px 5px',
       opacity: surf.visible ? 1 : 0.45,
     }}>
       {/* Color swatch / picker */}
@@ -67,6 +77,7 @@ function SurfaceRow({ surf, groups, onUpdate, onRemove, onSplit, onTrace, onHove
       {/* Label */}
       <input
         value={surf.label}
+        onClick={e => e.stopPropagation()}
         onChange={e => onUpdate(surf.id, { label: e.target.value })}
         style={{
           flex: 1, background: 'transparent', border: 'none',
@@ -186,6 +197,7 @@ export default function SurfacePanel() {
     meshVisible, setMeshVisible,
     traceSurfaceMeasure,
     setHoveredSurfaceId,
+    selectedSurfaceId, setSelectedSurfaceId,
   } = useViewer()
 
   const [detecting, setDetecting] = useState(false)
@@ -193,7 +205,21 @@ export default function SurfacePanel() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [filterType, setFilterType] = useState<'all' | 'roof' | 'floor' | 'wall'>('all')
 
+  // Ref map: surfaceId → DOM element for scroll-into-view
+  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
   const isMesh = fileType && fileType !== 'e57'
+
+  // Auto-scroll + open panel when a surface is selected from 3D
+  useEffect(() => {
+    if (!selectedSurfaceId) return
+    setOpen(true)
+    // Give React a tick to render
+    setTimeout(() => {
+      rowRefs.current.get(selectedSurfaceId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 50)
+  }, [selectedSurfaceId])
+
   if (streamStatus !== 'done') return null
 
   function toggleGroupCollapsed(id: string) {
@@ -523,9 +549,13 @@ export default function SurfacePanel() {
                                   : undefined
                               return (
                                 <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups}
+                                  selected={surf.id === selectedSurfaceId}
                                   onUpdate={updateSurface} onRemove={removeSurface}
                                   onSplit={handleSplit} onTrace={handleTrace}
-                                  onHover={setHoveredSurfaceId} param={p} />
+                                  onHover={setHoveredSurfaceId} onSelect={setSelectedSurfaceId}
+                                  onRef={el => { if (el) rowRefs.current.set(surf.id, el); else rowRefs.current.delete(surf.id) }}
+                                  param={p}
+                                />
                               )
                             })
                         }
@@ -565,9 +595,13 @@ export default function SurfacePanel() {
                           : undefined
                       return (
                         <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups}
+                          selected={surf.id === selectedSurfaceId}
                           onUpdate={updateSurface} onRemove={removeSurface}
                           onSplit={handleSplit} onTrace={handleTrace}
-                          onHover={setHoveredSurfaceId} param={p} />
+                          onHover={setHoveredSurfaceId} onSelect={setSelectedSurfaceId}
+                          onRef={el => { if (el) rowRefs.current.set(surf.id, el); else rowRefs.current.delete(surf.id) }}
+                          param={p}
+                        />
                       )
                     })}
                   </div>

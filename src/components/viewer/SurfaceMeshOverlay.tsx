@@ -6,7 +6,7 @@ import { useViewer } from '../../lib/viewerState.js'
 
 /** Renders a semi-transparent coloured overlay mesh for each detected surface (mesh mode only). */
 export default function SurfaceMeshOverlay() {
-  const { surfaces, surfaceColorMode, fileType, hoveredSurfaceId } = useViewer()
+  const { surfaces, surfaceColorMode, fileType, hoveredSurfaceId, setHoveredSurfaceId, setSelectedSurfaceId } = useViewer()
 
   const isMesh = fileType && fileType !== 'e57'
   if (!surfaceColorMode || !isMesh) return null
@@ -18,9 +18,12 @@ export default function SurfaceMeshOverlay() {
         .map((s) => (
           <SurfaceOverlayMesh
             key={s.id}
+            id={s.id}
             color={s.color}
             triangles={s.worldTriangles!}
             hovered={s.id === hoveredSurfaceId}
+            onHover={setHoveredSurfaceId}
+            onSelect={setSelectedSurfaceId}
           />
         ))}
     </>
@@ -28,13 +31,19 @@ export default function SurfaceMeshOverlay() {
 }
 
 function SurfaceOverlayMesh({
+  id,
   color,
   triangles,
   hovered,
+  onHover,
+  onSelect,
 }: {
+  id: string
   color: string
   triangles: Float32Array
   hovered: boolean
+  onHover: (id: string | null) => void
+  onSelect: (id: string | null) => void
 }) {
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
@@ -48,7 +57,7 @@ function SurfaceOverlayMesh({
       new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity: hovered ? 0.85 : 0.45,
+        opacity: hovered ? 0.80 : 0.40,
         side: THREE.DoubleSide,
         depthWrite: false,
       }),
@@ -57,10 +66,17 @@ function SurfaceOverlayMesh({
 
   return (
     <>
-      <mesh geometry={geometry} material={material} renderOrder={2} />
+      <mesh
+        geometry={geometry}
+        material={material}
+        renderOrder={2}
+        onPointerOver={(e) => { e.stopPropagation(); onHover(id) }}
+        onPointerOut={() => onHover(null)}
+        onClick={(e) => { e.stopPropagation(); onSelect(id) }}
+      />
       {hovered && (
         <mesh geometry={geometry} renderOrder={3}>
-          <meshBasicMaterial color={color} wireframe transparent opacity={0.5} depthWrite={false} />
+          <meshBasicMaterial color={color} wireframe transparent opacity={0.45} depthWrite={false} />
         </mesh>
       )}
     </>
