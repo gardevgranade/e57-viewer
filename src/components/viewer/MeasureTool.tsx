@@ -192,6 +192,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea
             key={`seg-${i}`}
             position={[mx, my, mz]}
             renderOrder={998}
+            userData={{ isMeasurement: true }}
             onPointerEnter={(e) => { e.stopPropagation(); setHovered('line') }}
             onPointerLeave={() => { setHovered(null); setShowMenu(null) }}
             onClick={(e) => { e.stopPropagation(); setShowMenu({ segIdx: i }) }}
@@ -210,6 +211,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea
             key={`dot-${i}`}
             position={[p.x, p.y, p.z]}
             renderOrder={999}
+            userData={{ isMeasurement: true }}
             onPointerEnter={(e) => { e.stopPropagation(); setHovered(i) }}
             onPointerLeave={() => setHovered(null)}
             onClick={(e) => {
@@ -422,7 +424,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
       }
 
       const hits = rc.intersectObjects(scene.children, true)
-        .filter(h => h.object instanceof THREE.Points || h.object instanceof THREE.Mesh)
+        .filter(h => (h.object instanceof THREE.Points || h.object instanceof THREE.Mesh) && !h.object.userData?.isMeasurement)
       if (hits.length > 0) {
         resolved = { pos: hits[0].point, type: 'free' }
       } else {
@@ -472,7 +474,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
 
       rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
       const hits = rc.intersectObjects(scene.children, true)
-        .filter(h => h.object instanceof THREE.Points || h.object instanceof THREE.Mesh)
+        .filter(h => (h.object instanceof THREE.Points || h.object instanceof THREE.Mesh) && !h.object.userData?.isMeasurement)
       if (hits.length > 0) {
         const p = hits[0].point
         setPoints(prev => prev.map((pt, i) => i === idx ? { x: p.x, y: p.y, z: p.z } : pt))
@@ -544,7 +546,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
       const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1
       rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
       const hits = rc.intersectObjects(scene.children, true)
-        .filter(h => h.object instanceof THREE.Points || h.object instanceof THREE.Mesh)
+        .filter(h => (h.object instanceof THREE.Points || h.object instanceof THREE.Mesh) && !h.object.userData?.isMeasurement)
       if (hits.length > 0) {
         const p = hits[0].point
         // Auto-close if near first point
@@ -649,6 +651,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
             key={i}
             position={[p.x, p.y, p.z]}
             renderOrder={999}
+            userData={{ isMeasurement: true }}
             onPointerEnter={e => { e.stopPropagation(); setHoveredIdx(i) }}
             onPointerLeave={() => { if (draggingIdx === null) setHoveredIdx(null) }}
             onPointerDown={e => {
