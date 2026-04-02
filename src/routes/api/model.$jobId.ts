@@ -16,7 +16,7 @@ export const Route = createFileRoute('/api/model/$jobId')({
   component: () => null,
   server: {
     handlers: {
-      GET: async ({ params }) => {
+      GET: async ({ params, request }) => {
         const job = getJob(params.jobId)
         if (!job) {
           return new Response(JSON.stringify({ error: 'Job not found' }), {
@@ -24,6 +24,33 @@ export const Route = createFileRoute('/api/model/$jobId')({
             headers: { 'content-type': 'application/json' },
           })
         }
+
+        // Serve the companion MTL file when ?mtl=1
+        const url = new URL(request.url)
+        if (url.searchParams.get('mtl') === '1') {
+          if (!job.mtlPath) {
+            return new Response(JSON.stringify({ error: 'No MTL file for this job' }), {
+              status: 404,
+              headers: { 'content-type': 'application/json' },
+            })
+          }
+          if (!existsSync(job.mtlPath)) {
+            return new Response(JSON.stringify({ error: 'MTL file no longer available' }), {
+              status: 410,
+              headers: { 'content-type': 'application/json' },
+            })
+          }
+          const data = await readFile(job.mtlPath)
+          return new Response(data.buffer as ArrayBuffer, {
+            status: 200,
+            headers: {
+              'content-type': 'text/plain',
+              'content-length': String(data.byteLength),
+              'cache-control': 'private, max-age=300',
+            },
+          })
+        }
+
         if (job.fileType === 'e57') {
           return new Response(JSON.stringify({ error: 'Use /api/stream/:jobId for E57 files' }), {
             status: 400,

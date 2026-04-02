@@ -17,6 +17,7 @@ export interface BoundingBox {
 export interface Job {
   id: string
   filePath: string
+  mtlPath?: string
   fileType: FileType
   status: JobStatus
   totalPoints: number
@@ -34,10 +35,11 @@ if (!g[STORE_KEY]) g[STORE_KEY] = new Map<string, Job>()
 const store: Map<string, Job> = g[STORE_KEY]!
 const TTL_MS = 5 * 60 * 1000 // 5 minutes
 
-export function createJob(filePath: string, fileType: FileType): Job {
+export function createJob(filePath: string, fileType: FileType, mtlPath?: string): Job {
   const job: Job = {
     id: randomUUID(),
     filePath,
+    mtlPath,
     fileType,
     status: 'pending',
     totalPoints: 0,
@@ -63,6 +65,9 @@ async function cleanupJob(job: Job): Promise<void> {
   store.delete(job.id)
   if (existsSync(job.filePath)) {
     await unlink(job.filePath).catch(() => {})
+  }
+  if (job.mtlPath && existsSync(job.mtlPath)) {
+    await unlink(job.mtlPath).catch(() => {})
   }
 }
 

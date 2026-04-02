@@ -50,10 +50,19 @@ export const Route = createFileRoute('/api/upload')({
         const filePath = join(tmpdir(), `model-upload-${randomUUID()}.${ext}`)
         await writeFile(filePath, Buffer.from(bytes))
 
-        const job = createJob(filePath, fileType)
+        // Optionally accept a companion .mtl file for OBJ uploads
+        let mtlPath: string | undefined
+        const mtlFile = formData.get('mtl')
+        if (fileType === 'obj' && mtlFile instanceof File) {
+          const mtlBytes = await mtlFile.arrayBuffer()
+          mtlPath = join(tmpdir(), `model-upload-${randomUUID()}.mtl`)
+          await writeFile(mtlPath, Buffer.from(mtlBytes))
+        }
+
+        const job = createJob(filePath, fileType, mtlPath)
 
         return new Response(
-          JSON.stringify({ jobId: job.id, fileName: file.name, size: file.size, fileType }),
+          JSON.stringify({ jobId: job.id, fileName: file.name, size: file.size, fileType, hasMtl: !!mtlPath }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       },

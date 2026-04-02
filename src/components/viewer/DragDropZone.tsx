@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useViewer } from '../../lib/viewerState.js'
 
 const ACCEPTED_EXTENSIONS = ['.e57', '.dae', '.obj', '.skp']
-const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.join(',')
+const ACCEPT_ATTR = [...ACCEPTED_EXTENSIONS, '.mtl'].join(',')
 
 function getExtension(name: string) {
   return name.split('.').pop()?.toLowerCase() ?? ''
@@ -24,7 +24,7 @@ export default function DragDropZone() {
   const [isDragging, setIsDragging] = useState(false)
 
   const handleFile = useCallback(
-    async (file: File) => {
+    async (file: File, mtlFile?: File) => {
       const ext = getExtension(file.name)
       if (!ACCEPTED_EXTENSIONS.includes(`.${ext}`)) {
         setError(`Unsupported file type. Accepted: ${ACCEPTED_EXTENSIONS.join(', ')}`)
@@ -35,6 +35,9 @@ export default function DragDropZone() {
 
       const form = new FormData()
       form.append('file', file)
+      if (ext === 'obj' && mtlFile) {
+        form.append('mtl', mtlFile)
+      }
 
       try {
         const res = await fetch('/api/upload', { method: 'POST', body: form })
@@ -55,12 +58,21 @@ export default function DragDropZone() {
     [reset, setUploading, setJobId, setStreamStatus, setFileType, setError],
   )
 
+  /** Pick the main model file and an optional companion MTL from a FileList. */
+  function pickFiles(files: FileList | File[]): { main: File; mtl?: File } | null {
+    const arr = Array.from(files)
+    const main = arr.find((f) => ACCEPTED_EXTENSIONS.includes(`.${getExtension(f.name)}`))
+    if (!main) return null
+    const mtl = arr.find((f) => getExtension(f.name) === 'mtl')
+    return { main, mtl }
+  }
+
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragging(false)
-      const file = e.dataTransfer.files[0]
-      if (file) handleFile(file)
+      const picked = pickFiles(e.dataTransfer.files)
+      if (picked) handleFile(picked.main, picked.mtl)
     },
     [handleFile],
   )
@@ -73,8 +85,10 @@ export default function DragDropZone() {
   const onDragLeave = () => setIsDragging(false)
 
   const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) handleFile(file)
+    if (e.target.files && e.target.files.length > 0) {
+      const picked = pickFiles(e.target.files)
+      if (picked) handleFile(picked.main, picked.mtl)
+    }
     e.target.value = ''
   }
 
@@ -123,6 +137,7 @@ export default function DragDropZone() {
         ref={inputRef}
         type="file"
         accept={ACCEPT_ATTR}
+        multiple
         className="hidden"
         onChange={onInputChange}
       />
@@ -134,7 +149,7 @@ export default function DragDropZone() {
           {isDragging ? 'Drop your 3D file' : 'Drop a 3D file here'}
         </p>
         <p className="mt-1 text-sm text-white/50">or click to browse</p>
-        <p className="mt-1 text-xs text-white/30">E57 · DAE · OBJ · SKP</p>
+        <p className="mt-1 text-xs text-white/30">E57 · DAE · OBJ (+MTL) · SKP</p>
       </div>
     </div>
   )

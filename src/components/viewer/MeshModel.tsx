@@ -5,6 +5,7 @@ import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { useViewer } from '../../lib/viewerState.js'
 import type { FlyCameraHandle } from './FlyCamera.js'
@@ -65,7 +66,21 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
           })
           object = collada.scene
         } else if (fileType === 'obj') {
+          // Try to fetch companion MTL
+          let materials: ReturnType<MTLLoader['parse']> | undefined
+          try {
+            const mtlRes = await fetch(`/api/model/${jobId}?mtl=1`)
+            if (mtlRes.ok) {
+              const mtlText = await mtlRes.text()
+              const mtlLoader = new MTLLoader()
+              materials = mtlLoader.parse(mtlText, '')
+              materials.preload()
+            }
+          } catch {
+            // No MTL — proceed with default material
+          }
           const loader = new OBJLoader()
+          if (materials) loader.setMaterials(materials)
           object = await new Promise<THREE.Group>((resolve, reject) => {
             loader.load(url, resolve, undefined, reject)
           })
