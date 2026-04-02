@@ -206,6 +206,8 @@ export default function SurfacePanel() {
   const [open, setOpen] = useState(true)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [filterType, setFilterType] = useState<'all' | 'roof' | 'floor' | 'wall'>('all')
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
+  const [editingGroupLabel, setEditingGroupLabel] = useState('')
 
   // Ref map: surfaceId → DOM element for scroll-into-view
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -398,8 +400,42 @@ export default function SurfacePanel() {
               {collapsed ? '▶' : '▼'}
             </button>
             {depth > 0 && <span style={{ color: '#475569', fontSize: 10, flexShrink: 0 }}>↳</span>}
-            <input value={group.label} onChange={e => updateGroup(group.id, { label: e.target.value })}
-              style={{ flex: 1, background: 'transparent', border: 'none', color: labelColor, fontSize: 11, fontWeight: 700, outline: 'none', minWidth: 0 }} />
+            {editingGroupId === group.id ? (
+              <input
+                autoFocus
+                value={editingGroupLabel}
+                onChange={e => setEditingGroupLabel(e.target.value)}
+                onBlur={() => {
+                  const trimmed = editingGroupLabel.trim()
+                  if (trimmed) updateGroup(group.id, { label: trimmed })
+                  setEditingGroupId(null)
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                  if (e.key === 'Escape') { setEditingGroupId(null) }
+                }}
+                style={{
+                  flex: 1, minWidth: 0, fontSize: 11, fontWeight: 700,
+                  background: '#1e293b', border: '1px solid #4f46e5',
+                  borderRadius: 4, color: labelColor, outline: 'none', padding: '1px 5px',
+                }}
+              />
+            ) : (
+              <span
+                onDoubleClick={() => { setEditingGroupId(group.id); setEditingGroupLabel(group.label) }}
+                style={{ flex: 1, minWidth: 0, fontSize: 11, fontWeight: 700, color: labelColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text' }}
+                title="Double-click to rename"
+              >
+                {group.label}
+              </span>
+            )}
+            <button
+              onClick={() => { setEditingGroupId(group.id); setEditingGroupLabel(group.label) }}
+              title="Rename group"
+              style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: 0, flexShrink: 0 }}
+            >
+              ✏️
+            </button>
             {totalArea > 0 && <span style={{ color: '#64748b', fontSize: 10, flexShrink: 0 }}>{fmtArea(totalArea)}</span>}
             {/* Add subgroup */}
             <button onClick={() => addGroup({ id: `group-${Date.now()}`, label: 'Subgroup', parentId: group.id })}
