@@ -73,6 +73,42 @@ export function parseDxfToThree(dxfText: string): THREE.Group {
     arr.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z)
   }
 
+  /** Triangulate a closed coplanar polygon and add as filled mesh faces. */
+  function fillClosedPolygon(color: number, pts: THREE.Vector3[]) {
+    if (pts.length < 3) return
+
+    // Compute polygon normal via Newell method
+    let nx = 0, ny = 0, nz = 0
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length]
+      nx += (a.y - b.y) * (a.z + b.z)
+      ny += (a.z - b.z) * (a.x + b.x)
+      nz += (a.x - b.x) * (a.y + b.y)
+    }
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz)
+    if (len < 1e-10) return
+    nx /= len; ny /= len; nz /= len
+
+    // Build a local 2D coordinate system on the polygon plane
+    const normal = new THREE.Vector3(nx, ny, nz)
+    const up = Math.abs(normal.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)
+    const u = new THREE.Vector3().crossVectors(up, normal).normalize()
+    const v = new THREE.Vector3().crossVectors(normal, u).normalize()
+    const origin = pts[0]
+
+    // Project to 2D
+    const pts2d: THREE.Vector2[] = pts.map(p => {
+      const d = new THREE.Vector3().subVectors(p, origin)
+      return new THREE.Vector2(d.dot(u), d.dot(v))
+    })
+
+    // Triangulate using THREE.ShapeUtils
+    const indices = THREE.ShapeUtils.triangulateShape(pts2d, [])
+    for (const [i0, i1, i2] of indices) {
+      addFaceTri(color, pts[i0], pts[i1], pts[i2])
+    }
+  }
+
   /** Process a list of entities, optionally applying a transform (for INSERT blocks). */
   function processEntities(entities: any[], transform?: THREE.Matrix4, depth = 0) {
     if (depth > 10) return // prevent infinite block recursion
@@ -99,9 +135,15 @@ export function parseDxfToThree(dxfText: string): THREE.Group {
           const verts = e.vertices
           if (verts && verts.length >= 2) {
             const pts = verts.map((v: any) => toVec3(v))
-            if (e.shape || e.closed) pts.push(pts[0].clone())
+            const closed = !!(e.shape || e.closed)
+            if (closed) pts.push(pts[0].clone())
             if (transform) pts.forEach((p: THREE.Vector3) => p.applyMatrix4(transform))
             addLineSeg(color, pts)
+            // Fill closed polylines as surfaces
+            if (closed && verts.length >= 3) {
+              const fillPts = pts.slice(0, -1) // remove duplicate closing point
+              fillClosedPolygon(color, fillPts)
+            }
           }
           break
         }
@@ -116,6 +158,8 @@ export function parseDxfToThree(dxfText: string): THREE.Group {
           pts.push(pts[0].clone())
           if (transform) pts.forEach(p => p.applyMatrix4(transform))
           addLineSeg(color, pts)
+          // Fill circle as disc surface
+          fillClosedPolygon(color, pts.slice(0, -1))
           break
         }
 
@@ -254,11 +298,16 @@ export function parseDxfToThree(dxfText: string): THREE.Group {
   }
 
   // Build batched face geometry
+  let totalFilledTris = 0
   for (const [color, verts] of facesByColor) {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
     geo.computeVertexNormals()
-    root.add(new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color, side: THREE.DoubleSide, shininess: 20 })))
+    root.add(new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color, side: THREE.DoubleSide, shininess: 20, transparent: true, opacity: 0.35 })))
+    totalFilledTris += verts.length / 9
+  }
+  if (totalFilledTris > 0) {
+    console.log(`[DXF] Created ${totalFilledTris} filled triangles from closed polylines/circles`)
   }
 
   return root
