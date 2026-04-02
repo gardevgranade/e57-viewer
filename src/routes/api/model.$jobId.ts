@@ -4,12 +4,15 @@ import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { getJob } from '../../lib/jobStore.js'
 import { convertSkpToGlb } from '../../lib/skpConvert.js'
+import { convertDwgToDxf } from '../../lib/dwgConvert.js'
 
 const CONTENT_TYPES: Record<string, string> = {
   e57: 'application/octet-stream',
   dae: 'model/vnd.collada+xml',
   obj: 'text/plain',
   skp: 'model/gltf-binary',
+  dxf: 'text/plain',
+  dwg: 'text/plain',
 }
 
 export const Route = createFileRoute('/api/model/$jobId')({
@@ -72,6 +75,10 @@ export const Route = createFileRoute('/api/model/$jobId')({
             // Convert SKP to GLB via Blender
             data = await convertSkpToGlb(job.filePath)
             contentType = 'model/gltf-binary'
+          } else if (job.fileType === 'dwg') {
+            // Convert DWG to DXF via ODA File Converter
+            data = await convertDwgToDxf(job.filePath)
+            contentType = 'text/plain'
           } else {
             data = await readFile(job.filePath)
             contentType = CONTENT_TYPES[job.fileType] ?? 'application/octet-stream'

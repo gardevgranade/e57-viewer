@@ -3,7 +3,7 @@ import { unlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 
 export type JobStatus = 'pending' | 'streaming' | 'done' | 'error'
-export type FileType = 'e57' | 'obj' | 'dae' | 'skp'
+export type FileType = 'e57' | 'obj' | 'dae' | 'skp' | 'dxf' | 'dwg'
 
 export interface BoundingBox {
   minX: number

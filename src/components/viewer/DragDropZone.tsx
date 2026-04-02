@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useViewer } from '../../lib/viewerState.js'
 
-const ACCEPTED_EXTENSIONS = ['.e57', '.dae', '.obj', '.skp']
+const ACCEPTED_EXTENSIONS = ['.e57', '.dae', '.obj', '.skp', '.dxf', '.dwg']
 const ACCEPT_ATTR = [...ACCEPTED_EXTENSIONS, '.mtl'].join(',')
 
 function getExtension(name: string) {
@@ -149,7 +149,7 @@ export default function DragDropZone() {
           {isDragging ? 'Drop your 3D file' : 'Drop a 3D file here'}
         </p>
         <p className="mt-1 text-sm text-white/50">or click to browse</p>
-        <p className="mt-1 text-xs text-white/30">E57 · DAE · OBJ (+MTL) · SKP</p>
+        <p className="mt-1 text-xs text-white/30">E57 · DAE · OBJ (+MTL) · SKP · DXF · DWG</p>
       </div>
     </div>
   )

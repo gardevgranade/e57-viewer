@@ -7,6 +7,7 @@ import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { parseDxfToThree } from '../../lib/dxfLoader.js'
 import { useViewer } from '../../lib/viewerState.js'
 import type { FlyCameraHandle } from './FlyCamera.js'
 
@@ -84,6 +85,10 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
           object = await new Promise<THREE.Group>((resolve, reject) => {
             loader.load(url, resolve, undefined, reject)
           })
+        } else if (fileType === 'dxf' || fileType === 'dwg') {
+          // DXF text (DWG is server-converted to DXF)
+          const dxfText = await blob.text()
+          object = parseDxfToThree(dxfText)
         } else {
           // skp (converted to GLB) or any other GLTF
           const loader = new GLTFLoader()
