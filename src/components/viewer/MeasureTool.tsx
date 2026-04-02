@@ -347,6 +347,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const sphereClickRef = useRef<number | null>(null)
   const prevTraceSerialRef = useRef(0)
   const ghostRef = useRef<{ pos: THREE.Vector3; type: SnapType | 'free' } | null>(null)
+  const dotRadiusRef = useRef(0.01)
 
   const snapKey = surfaces.map(s => `${s.id}:${s.visible ? 1 : 0}:${s.worldTriangles?.length ?? 0}`).join(',')
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -427,13 +428,24 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
       } else {
         resolved = null
       }
+
+      // Snap ghost to first point when close enough to close the polygon
+      if (resolved && points.length >= 3) {
+        const first = points[0]
+        const fp = new THREE.Vector3(first.x, first.y, first.z)
+        const d = resolved.pos.distanceTo(fp)
+        if (d < dotRadiusRef.current * 5) {
+          resolved = { pos: fp, type: 'vertex' }
+        }
+      }
+
       ghostRef.current = resolved
       setGhost(resolved)
     }
 
     gl.domElement.addEventListener('mousemove', onMove)
     return () => gl.domElement.removeEventListener('mousemove', onMove)
-  }, [measureActive, measureSnap, snapCandidates, camera, gl, scene, bbox])
+  }, [measureActive, measureSnap, snapCandidates, camera, gl, scene, bbox, points])
 
   // Drag
   useEffect(() => {
@@ -513,6 +525,16 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
 
       const g = ghostRef.current
       if (g) {
+        // Auto-close if clicking near first point with enough points
+        if (points.length >= 3) {
+          const first = points[0]
+          const d = Math.sqrt((g.pos.x - first.x) ** 2 + (g.pos.y - first.y) ** 2 + (g.pos.z - first.z) ** 2)
+          const closeThreshold = dotRadiusRef.current * 5
+          if (d < closeThreshold) {
+            setIsClosed(true)
+            return
+          }
+        }
         setPoints(prev => [...prev, { x: g.pos.x, y: g.pos.y, z: g.pos.z }])
         return
       }
@@ -525,6 +547,16 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
         .filter(h => h.object instanceof THREE.Points || h.object instanceof THREE.Mesh)
       if (hits.length > 0) {
         const p = hits[0].point
+        // Auto-close if near first point
+        if (points.length >= 3) {
+          const first = points[0]
+          const d = Math.sqrt((p.x - first.x) ** 2 + (p.y - first.y) ** 2 + (p.z - first.z) ** 2)
+          const closeThreshold = dotRadiusRef.current * 5
+          if (d < closeThreshold) {
+            setIsClosed(true)
+            return
+          }
+        }
         setPoints(prev => [...prev, { x: p.x, y: p.y, z: p.z }])
       }
     }
@@ -550,6 +582,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
 
   const span = bbox ? Math.max(bbox.maxX - bbox.minX, bbox.maxZ - bbox.minZ) : 5
   const dotRadius = Math.max(span * 0.004, 0.01)
+  dotRadiusRef.current = dotRadius
 
   const hasActive = points.length > 0 || ghost
   const hasSaved = savedMeasurements.length > 0
