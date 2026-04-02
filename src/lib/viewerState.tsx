@@ -68,6 +68,8 @@ export interface ViewerState {
   lassoPath: Array<{ x: number; y: number }>
   lassoDrawingComplete: boolean
   lassoSelectedIds: string[] | null
+  lassoTriangleMode: boolean
+  lassoSelectedTriangles: Array<{ surfaceId: string; triangleIndices: number[] }> | null
 }
 
 export interface ViewerActions {
@@ -119,6 +121,9 @@ export interface ViewerActions {
   setLassoPath: (pts: Array<{ x: number; y: number }>) => void
   setLassoDrawingComplete: (v: boolean) => void
   setLassoSelectedIds: (ids: string[] | null) => void
+  setLassoTriangleMode: (v: boolean) => void
+  setLassoSelectedTriangles: (v: Array<{ surfaceId: string; triangleIndices: number[] }> | null) => void
+  updateSurfaceGeometry: (id: string, worldTriangles: Float32Array) => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
     matrixWorld: THREE.Matrix4
@@ -187,6 +192,8 @@ const initialState: ViewerState = {
   lassoPath: [],
   lassoDrawingComplete: false,
   lassoSelectedIds: null,
+  lassoTriangleMode: false,
+  lassoSelectedTriangles: null,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -349,10 +356,25 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
         const bbox = new THREE.Box3().setFromObject(obj)
         setState(s => ({ ...s, objectYOffset: s.objectYOffset - bbox.min.y }))
       },
-      setLassoMode: (lassoMode) => setState(s => ({ ...s, lassoMode, lassoPath: [], lassoSelectedIds: null, lassoDrawingComplete: false })),
+      setLassoMode: (lassoMode) => setState(s => ({ ...s, lassoMode, lassoPath: [], lassoSelectedIds: null, lassoSelectedTriangles: null, lassoDrawingComplete: false })),
       setLassoPath: (lassoPath) => setState(s => ({ ...s, lassoPath })),
       setLassoDrawingComplete: (lassoDrawingComplete) => setState(s => ({ ...s, lassoDrawingComplete })),
       setLassoSelectedIds: (lassoSelectedIds) => setState(s => ({ ...s, lassoSelectedIds })),
+      setLassoTriangleMode: (lassoTriangleMode) => setState(s => ({ ...s, lassoTriangleMode, lassoSelectedIds: null, lassoSelectedTriangles: null })),
+      setLassoSelectedTriangles: (lassoSelectedTriangles) => setState(s => ({ ...s, lassoSelectedTriangles })),
+      updateSurfaceGeometry: (id, worldTriangles) =>
+        setStateUndoable(s => {
+          const surf = s.surfaces.find(x => x.id === id)
+          const oldCount = surf?.worldTriangles ? surf.worldTriangles.length / 9 : 0
+          const newCount = worldTriangles.length / 9
+          const newArea = (oldCount > 0 && surf?.area) ? surf.area * (newCount / oldCount) : undefined
+          return {
+            ...s,
+            surfaces: s.surfaces.map(x =>
+              x.id === id ? { ...x, worldTriangles, area: newArea } : x,
+            ),
+          }
+        }),
     }},
     [],
   )

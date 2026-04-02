@@ -19,8 +19,8 @@ function pointInPolygon(pt: { x: number; y: number }, poly: Array<{ x: number; y
 export default function LassoTool() {
   const { camera, gl } = useThree()
   const {
-    lassoDrawingComplete, lassoPath, surfaces,
-    setLassoSelectedIds, setLassoDrawingComplete,
+    lassoDrawingComplete, lassoPath, lassoTriangleMode, surfaces,
+    setLassoSelectedIds, setLassoSelectedTriangles, setLassoDrawingComplete,
   } = useViewer()
 
   useEffect(() => {
@@ -31,29 +31,53 @@ export default function LassoTool() {
 
     const rect = gl.domElement.getBoundingClientRect()
 
-    const selected = surfaces.filter(s => {
-      if (!s.visible || !s.worldTriangles || s.worldTriangles.length === 0) return false
-
-      const wt = s.worldTriangles
-      let cx = 0, cy = 0, cz = 0
-      const n = wt.length / 3
-      for (let i = 0; i < wt.length; i += 3) {
-        cx += wt[i]; cy += wt[i + 1]; cz += wt[i + 2]
+    function project(wx: number, wy: number, wz: number) {
+      const ndc = new THREE.Vector3(wx, wy, wz).project(camera)
+      return {
+        x: (ndc.x + 1) / 2 * rect.width + rect.left,
+        y: (1 - ndc.y) / 2 * rect.height + rect.top,
+        behind: ndc.z > 1,
       }
-      cx /= n; cy /= n; cz /= n
+    }
 
-      const ndc = new THREE.Vector3(cx, cy, cz).project(camera)
-      const sx = (ndc.x + 1) / 2 * rect.width + rect.left
-      const sy = (1 - ndc.y) / 2 * rect.height + rect.top
+    if (lassoTriangleMode) {
+      // Triangle mode: collect per-triangle centroid hits
+      const result: Array<{ surfaceId: string; triangleIndices: number[] }> = []
+      for (const s of surfaces) {
+        if (!s.visible || !s.worldTriangles || s.worldTriangles.length === 0) continue
+        const wt = s.worldTriangles
+        const triCount = Math.floor(wt.length / 9)
+        const selected: number[] = []
+        for (let i = 0; i < triCount; i++) {
+          const cx = (wt[i * 9] + wt[i * 9 + 3] + wt[i * 9 + 6]) / 3
+          const cy = (wt[i * 9 + 1] + wt[i * 9 + 4] + wt[i * 9 + 7]) / 3
+          const cz = (wt[i * 9 + 2] + wt[i * 9 + 5] + wt[i * 9 + 8]) / 3
+          const { x, y, behind } = project(cx, cy, cz)
+          if (!behind && pointInPolygon({ x, y }, lassoPath)) selected.push(i)
+        }
+        if (selected.length > 0) result.push({ surfaceId: s.id, triangleIndices: selected })
+      }
+      setLassoSelectedTriangles(result)
+    } else {
+      // Surface mode: select whole surfaces by centroid
+      const selected = surfaces.filter(s => {
+        if (!s.visible || !s.worldTriangles || s.worldTriangles.length === 0) return false
+        const wt = s.worldTriangles
+        let cx = 0, cy = 0, cz = 0
+        const n = wt.length / 3
+        for (let i = 0; i < wt.length; i += 3) {
+          cx += wt[i]; cy += wt[i + 1]; cz += wt[i + 2]
+        }
+        cx /= n; cy /= n; cz /= n
+        const { x, y, behind } = project(cx, cy, cz)
+        if (behind) return false
+        return pointInPolygon({ x, y }, lassoPath)
+      })
+      setLassoSelectedIds(selected.map(s => s.id))
+    }
 
-      if (ndc.z > 1) return false
-
-      return pointInPolygon({ x: sx, y: sy }, lassoPath)
-    })
-
-    setLassoSelectedIds(selected.map(s => s.id))
     setLassoDrawingComplete(false)
-  }, [lassoDrawingComplete]) // intentionally minimal deps — snapshot approach
+  }, [lassoDrawingComplete, lassoTriangleMode]) // snapshot — reads surfaces/path at trigger time
 
   return null
 }
