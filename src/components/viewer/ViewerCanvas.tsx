@@ -14,6 +14,8 @@ import SurfacePanel from './SurfacePanel.js'
 import SurfaceMeshOverlay from './SurfaceMeshOverlay.js'
 import SurfacePicker from './SurfacePicker.js'
 import SurfaceTooltip from './SurfaceTooltip.js'
+import LassoTool from './LassoTool.js'
+import LassoOverlay from './LassoOverlay.js'
 import PositioningGizmo from './PositioningGizmo.js'
 import ModelContextCard from './ModelContextCard.js'
 import PositioningPanel from './PositioningPanel.js'
@@ -76,6 +78,7 @@ export default function ViewerCanvas() {
           <MeasureTool flyCameraRef={flyCameraRef} />
           <SurfacePicker flyCameraRef={flyCameraRef} />
           <PositioningGizmo />
+          <LassoTool />
         </Suspense>
 
         <FlyCamera ref={flyCameraRef} />
@@ -91,6 +94,7 @@ export default function ViewerCanvas() {
       <ViewerControls />
       <SurfacePanel />
       <SurfaceTooltip />
+      <LassoOverlay />
       <ModelContextCard />
       <PositioningPanel />
     </div>

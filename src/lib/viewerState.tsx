@@ -64,6 +64,10 @@ export interface ViewerState {
   positioningMode: boolean
   objectYOffset: number
   modelClickPos: { x: number; y: number } | null
+  lassoMode: boolean
+  lassoPath: Array<{ x: number; y: number }>
+  lassoDrawingComplete: boolean
+  lassoSelectedIds: string[] | null
 }
 
 export interface ViewerActions {
@@ -111,6 +115,10 @@ export interface ViewerActions {
   setObjectYOffset: (v: number) => void
   setModelClickPos: (pos: { x: number; y: number } | null) => void
   moveModelToGround: () => void
+  setLassoMode: (v: boolean) => void
+  setLassoPath: (pts: Array<{ x: number; y: number }>) => void
+  setLassoDrawingComplete: (v: boolean) => void
+  setLassoSelectedIds: (ids: string[] | null) => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
     matrixWorld: THREE.Matrix4
@@ -175,6 +183,10 @@ const initialState: ViewerState = {
   positioningMode: false,
   objectYOffset: 0,
   modelClickPos: null,
+  lassoMode: false,
+  lassoPath: [],
+  lassoDrawingComplete: false,
+  lassoSelectedIds: null,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -337,6 +349,10 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
         const bbox = new THREE.Box3().setFromObject(obj)
         setState(s => ({ ...s, objectYOffset: s.objectYOffset - bbox.min.y }))
       },
+      setLassoMode: (lassoMode) => setState(s => ({ ...s, lassoMode, lassoPath: [], lassoSelectedIds: null, lassoDrawingComplete: false })),
+      setLassoPath: (lassoPath) => setState(s => ({ ...s, lassoPath })),
+      setLassoDrawingComplete: (lassoDrawingComplete) => setState(s => ({ ...s, lassoDrawingComplete })),
+      setLassoSelectedIds: (lassoSelectedIds) => setState(s => ({ ...s, lassoSelectedIds })),
     }},
     [],
   )

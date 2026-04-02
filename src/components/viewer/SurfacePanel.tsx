@@ -209,6 +209,7 @@ export default function SurfacePanel() {
     hoveredGroupId, setHoveredGroupId,
     canUndo, canRedo, undo, redo,
     setSurfaceTypeVisible,
+    lassoMode, setLassoMode,
   } = useViewer()
 
   const [detecting, setDetecting] = useState(false)
@@ -667,6 +668,23 @@ export default function SurfacePanel() {
               >
                 {detecting ? '⏳…' : '🔍 Auto-Detect All'}
               </button>
+
+              {/* Lasso selection tool */}
+              {surfaces.length > 0 && (
+                <button
+                  onClick={() => setLassoMode(!lassoMode)}
+                  style={{
+                    width: '100%', padding: '6px 0',
+                    background: lassoMode ? '#1e3a5f' : '#1e293b',
+                    border: `1px solid ${lassoMode ? '#3b82f6' : '#334155'}`,
+                    borderRadius: 6,
+                    color: lassoMode ? '#93c5fd' : '#94a3b8',
+                    fontWeight: 600, cursor: 'pointer', fontSize: 12,
+                  }}
+                >
+                  ✏️ {lassoMode ? 'Lasso Active (Esc to exit)' : 'Lasso Select'}
+                </button>
+              )}
             </div>
           )}
 
