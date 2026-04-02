@@ -23,6 +23,7 @@ export interface PickedSurface {
 export interface SurfaceGroup {
   id: string
   label: string
+  parentId: string | null
 }
 
 export interface ViewerState {
@@ -234,13 +235,23 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
       addGroup: (group: SurfaceGroup) =>
         setState((s) => ({ ...s, surfaceGroups: [...s.surfaceGroups, group] })),
       removeGroup: (id) =>
-        setState((s) => ({
-          ...s,
-          surfaceGroups: s.surfaceGroups.filter(g => g.id !== id),
-          surfaces: s.surfaces.map(surf =>
-            surf.groupId === id ? { ...surf, groupId: null } : surf,
-          ),
-        })),
+        setState((s) => {
+          // Collect this group + all descendants
+          const toRemove = new Set<string>()
+          const queue = [id]
+          while (queue.length) {
+            const cur = queue.shift()!
+            toRemove.add(cur)
+            s.surfaceGroups.filter(g => g.parentId === cur).forEach(g => queue.push(g.id))
+          }
+          return {
+            ...s,
+            surfaceGroups: s.surfaceGroups.filter(g => !toRemove.has(g.id)),
+            surfaces: s.surfaces.map(surf =>
+              surf.groupId && toRemove.has(surf.groupId) ? { ...surf, groupId: null } : surf,
+            ),
+          }
+        }),
       updateGroup: (id, patch) =>
         setState((s) => ({
           ...s,

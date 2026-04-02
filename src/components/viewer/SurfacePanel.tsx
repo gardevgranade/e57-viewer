@@ -367,10 +367,87 @@ export default function SurfacePanel() {
   }
 
   function handleAddGroup() {
-    addGroup({ id: `group-${Date.now()}`, label: `Group ${surfaceGroups.length + 1}` })
+    addGroup({ id: `group-${Date.now()}`, label: `Group ${surfaceGroups.filter(g=>!g.parentId).length + 1}`, parentId: null })
   }
 
   const ungroupedSurfaces = surfaces.filter(s => s.groupId === null && matchesFilter(s))
+
+  /** Recursively render group tree starting from parentId */
+  function renderGroupTree(parentId: string | null, depth: number): React.ReactNode {
+    const children = surfaceGroups.filter(g => g.parentId === parentId)
+    if (children.length === 0) return null
+    return children.map(group => {
+      const inGroup = surfaces.filter(s => s.groupId === group.id && matchesFilter(s))
+      const collapsed = collapsedGroups.has(group.id)
+      const anyVisible = inGroup.some(s => s.visible)
+      const totalArea = groupTotalArea(group.id, surfaces)
+      const labelColor = depth === 0 ? '#f59e0b' : '#a5b4fc'
+      return (
+        <div key={group.id} style={{
+          background: depth === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.03)',
+          borderRadius: 6, overflow: 'hidden',
+          marginLeft: depth * 10,
+          border: depth > 0 ? '1px solid rgba(165,180,252,0.12)' : 'none',
+        }}>
+          {/* Group header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 6px', borderBottom: collapsed ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
+            <button onClick={() => toggleGroupCollapsed(group.id)}
+              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 10, padding: 0, flexShrink: 0 }}>
+              {collapsed ? '▶' : '▼'}
+            </button>
+            {depth > 0 && <span style={{ color: '#475569', fontSize: 10, flexShrink: 0 }}>↳</span>}
+            <input value={group.label} onChange={e => updateGroup(group.id, { label: e.target.value })}
+              style={{ flex: 1, background: 'transparent', border: 'none', color: labelColor, fontSize: 11, fontWeight: 700, outline: 'none', minWidth: 0 }} />
+            {totalArea > 0 && <span style={{ color: '#64748b', fontSize: 10, flexShrink: 0 }}>{fmtArea(totalArea)}</span>}
+            {/* Add subgroup */}
+            <button onClick={() => addGroup({ id: `group-${Date.now()}`, label: 'Subgroup', parentId: group.id })}
+              title="Add subgroup" style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: 0, flexShrink: 0 }}>
+              ＋
+            </button>
+            <button onClick={() => toggleGroupVisibility(group.id)}
+              title={anyVisible ? 'Hide group' : 'Show group'}
+              style={{ background: 'none', border: 'none', color: anyVisible ? '#e2e8f0' : '#334155', cursor: 'pointer', fontSize: 12, padding: 0, flexShrink: 0 }}>
+              {anyVisible ? '👁' : '🙈'}
+            </button>
+            <button onClick={() => removeGroup(group.id)} title="Delete group"
+              style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: 0, flexShrink: 0 }}>
+              🗑
+            </button>
+          </div>
+
+          {!collapsed && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '3px 4px' }}>
+              {/* Surfaces in this group */}
+              {inGroup.length === 0 && !surfaceGroups.some(g => g.parentId === group.id)
+                ? <div style={{ color: '#475569', fontSize: 11, textAlign: 'center', padding: '4px 0' }}>No surfaces</div>
+                : inGroup.map(surf => {
+                    const t = surfaceType(surf.label)
+                    const p = t === 'roof' ? `Slope: ${slopeAngle(surf.normal) ?? '—'}`
+                      : t === 'floor' ? elevation(surf.worldTriangles) ?? undefined : undefined
+                    return (
+                      <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups}
+                        selected={surf.id === selectedSurfaceId}
+                        onUpdate={updateSurface} onRemove={removeSurface}
+                        onSplit={handleSplit} onTrace={handleTrace}
+                        onHover={setHoveredSurfaceId} onSelect={setSelectedSurfaceId}
+                        onRef={el => { if (el) rowRefs.current.set(surf.id, el); else rowRefs.current.delete(surf.id) }}
+                        param={p} />
+                    )
+                  })
+              }
+              {/* Child groups (recursive) */}
+              {renderGroupTree(group.id, depth + 1)}
+              {inGroup.length > 0 && (
+                <div style={{ color: '#475569', fontSize: 10, textAlign: 'right', paddingRight: 4 }}>
+                  {inGroup.length} surface{inGroup.length !== 1 ? 's' : ''}{totalArea > 0 ? ` · ${fmtArea(totalArea)}` : ''}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )
+    })
+  }
 
   return (
     <div style={{
@@ -486,90 +563,8 @@ export default function SurfacePanel() {
           {surfaces.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
 
-              {/* Groups */}
-              {surfaceGroups.map(group => {
-                const inGroup = surfaces.filter(s => s.groupId === group.id && matchesFilter(s))
-                const collapsed = collapsedGroups.has(group.id)
-                const anyVisible = inGroup.some(s => s.visible)
-                const totalArea = groupTotalArea(group.id, surfaces)
-
-                return (
-                  <div key={group.id} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 6, overflow: 'hidden' }}>
-                    {/* Group header */}
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 4,
-                      padding: '4px 6px',
-                      borderBottom: collapsed ? 'none' : '1px solid rgba(255,255,255,0.06)',
-                    }}>
-                      <button
-                        onClick={() => toggleGroupCollapsed(group.id)}
-                        style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 10, padding: 0, flexShrink: 0 }}
-                      >
-                        {collapsed ? '▶' : '▼'}
-                      </button>
-                      <input
-                        value={group.label}
-                        onChange={e => updateGroup(group.id, { label: e.target.value })}
-                        style={{
-                          flex: 1, background: 'transparent', border: 'none',
-                          color: '#f59e0b', fontSize: 11, fontWeight: 700,
-                          outline: 'none', minWidth: 0,
-                        }}
-                      />
-                      {totalArea > 0 && (
-                        <span style={{ color: '#64748b', fontSize: 10, flexShrink: 0 }}>{fmtArea(totalArea)}</span>
-                      )}
-                      <button
-                        onClick={() => toggleGroupVisibility(group.id)}
-                        title={anyVisible ? 'Hide group' : 'Show group'}
-                        style={{ background: 'none', border: 'none', color: anyVisible ? '#e2e8f0' : '#334155', cursor: 'pointer', fontSize: 12, padding: 0, flexShrink: 0 }}
-                      >
-                        {anyVisible ? '👁' : '🙈'}
-                      </button>
-                      <button
-                        onClick={() => removeGroup(group.id)}
-                        title="Delete group"
-                        style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: 0, flexShrink: 0 }}
-                      >
-                        🗑
-                      </button>
-                    </div>
-
-                    {/* Group surfaces */}
-                    {!collapsed && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '3px 4px' }}>
-                        {inGroup.length === 0
-                          ? <div style={{ color: '#475569', fontSize: 11, textAlign: 'center', padding: '4px 0' }}>No surfaces</div>
-                          : inGroup.map(surf => {
-                              const type = surfaceType(surf.label)
-                              const p = type === 'roof'
-                                ? `Slope: ${slopeAngle(surf.normal) ?? '—'}`
-                                : type === 'floor'
-                                  ? elevation(surf.worldTriangles) ?? undefined
-                                  : undefined
-                              return (
-                                <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups}
-                                  selected={surf.id === selectedSurfaceId}
-                                  onUpdate={updateSurface} onRemove={removeSurface}
-                                  onSplit={handleSplit} onTrace={handleTrace}
-                                  onHover={setHoveredSurfaceId} onSelect={setSelectedSurfaceId}
-                                  onRef={el => { if (el) rowRefs.current.set(surf.id, el); else rowRefs.current.delete(surf.id) }}
-                                  param={p}
-                                />
-                              )
-                            })
-                        }
-                        {inGroup.length > 0 && (
-                          <div style={{ color: '#475569', fontSize: 10, textAlign: 'right', paddingRight: 4 }}>
-                            {inGroup.length} surface{inGroup.length !== 1 ? 's' : ''}
-                            {totalArea > 0 ? ` · ${fmtArea(totalArea)}` : ''}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+              {/* Groups — rendered as tree, top-level first */}
+              {renderGroupTree(null, 0)}
 
               {/* Ungrouped */}
               {ungroupedSurfaces.length > 0 && (
