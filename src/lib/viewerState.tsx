@@ -91,6 +91,7 @@ export interface ViewerActions {
   setShowMesh: (show: boolean) => void
   /** Pre-multiply current orientation by a ±90° rotation around one axis. */
   applyObjectRotation: (axis: 'x' | 'y' | 'z', angleDeg: number) => void
+  setObjectQuaternion: (q: Quaternion4) => void
   resetObjectRotation: () => void
   setFileType: (fileType: string | null) => void
   setMeasureActive: (active: boolean) => void
@@ -264,6 +265,7 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
           ...s,
           objectQuaternion: multiplyQuaternions(axisAngleQuat(axis, angleDeg), s.objectQuaternion),
         })),
+      setObjectQuaternion: (objectQuaternion) => setState((s) => ({ ...s, objectQuaternion })),
       resetObjectRotation: () => setState((s) => ({ ...s, objectQuaternion: IDENTITY_QUAT })),
       setFileType: (fileType) => setState((s) => ({ ...s, fileType })),
       setMeasureActive: (measureActive) => setState((s) => ({ ...s, measureActive })),
