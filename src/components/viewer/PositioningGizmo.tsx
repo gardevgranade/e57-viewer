@@ -1,7 +1,5 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useThree } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { useViewer } from '../../lib/viewerState.js'
@@ -9,52 +7,9 @@ import { useViewer } from '../../lib/viewerState.js'
 export default function PositioningGizmo() {
   const {
     positioningMode,
-    setModelClickPos,
     applyObjectRotation,
     meshObjectRef,
-    measureActive, pickSurfaceMode,
-    meshVisible,
-    fileType, streamStatus,
   } = useViewer()
-
-  const { gl, camera, scene } = useThree()
-
-  // Click listener — open context card when model is clicked (not surface overlay, not special modes)
-  useEffect(() => {
-    if (streamStatus !== 'done') return
-    const isMesh = fileType && fileType !== 'e57'
-    if (!isMesh) return
-
-    const handler = (e: MouseEvent) => {
-      if (positioningMode || measureActive || pickSurfaceMode || !meshVisible) return
-
-      const rect = gl.domElement.getBoundingClientRect()
-      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
-      const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1
-      const raycaster = new THREE.Raycaster()
-      raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
-      const hits = raycaster.intersectObjects(scene.children, true)
-        .filter(h => h.object instanceof THREE.Mesh)
-
-      if (hits.length === 0) { setModelClickPos(null); return }
-      // If topmost hit is a surface overlay, don't open context card
-      if (hits[0].object.userData.isSurfaceOverlay) { setModelClickPos(null); return }
-      // Check if any hit is a descendant of the model group
-      const modelHit = hits.find(h => {
-        let node: THREE.Object3D | null = h.object
-        while (node) {
-          if (node === meshObjectRef.current) return true
-          node = node.parent
-        }
-        return false
-      })
-      if (!modelHit) { setModelClickPos(null); return }
-      setModelClickPos({ x: e.clientX, y: e.clientY })
-    }
-
-    gl.domElement.addEventListener('click', handler)
-    return () => gl.domElement.removeEventListener('click', handler)
-  }, [gl, camera, scene, positioningMode, measureActive, pickSurfaceMode, meshVisible, fileType, streamStatus, setModelClickPos, meshObjectRef])
 
   // Compute bbox (always, but only used when positioningMode)
   const obj = meshObjectRef.current
