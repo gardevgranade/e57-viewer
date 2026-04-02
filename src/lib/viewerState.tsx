@@ -53,6 +53,7 @@ export interface ViewerState {
   pickSurfaceMode: boolean
   meshVisible: boolean
   hoveredSurfaceId: string | null
+  hoveredGroupId: string | null
   selectedSurfaceId: string | null
   selectedSurfacePos: { x: number; y: number } | null
   /** When serial changes, MeasureTool will pre-populate with these points */
@@ -97,6 +98,7 @@ export interface ViewerActions {
   setPickSurfaceMode: (v: boolean) => void
   setMeshVisible: (v: boolean) => void
   setHoveredSurfaceId: (id: string | null) => void
+  setHoveredGroupId: (id: string | null) => void
   setSelectedSurfaceId: (id: string | null) => void
   setSelectedSurface: (id: string | null, pos?: { x: number; y: number }) => void
   traceSurfaceMeasure: (pts: Array<{ x: number; y: number; z: number }>) => void
@@ -156,6 +158,7 @@ const initialState: ViewerState = {
   pickSurfaceMode: false,
   meshVisible: true,
   hoveredSurfaceId: null,
+  hoveredGroupId: null,
   selectedSurfaceId: null,
   selectedSurfacePos: null,
   measureTraceSerial: 0,
@@ -293,6 +296,7 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
       setPickSurfaceMode: (pickSurfaceMode) => setState((s) => ({ ...s, pickSurfaceMode })),
       setMeshVisible: (meshVisible) => setState((s) => ({ ...s, meshVisible })),
       setHoveredSurfaceId: (hoveredSurfaceId) => setState((s) => ({ ...s, hoveredSurfaceId })),
+      setHoveredGroupId: (hoveredGroupId) => setState((s) => ({ ...s, hoveredGroupId })),
       setSelectedSurfaceId: (selectedSurfaceId) => setState((s) => ({ ...s, selectedSurfaceId, selectedSurfacePos: null })),
       setSelectedSurface: (selectedSurfaceId, selectedSurfacePos?) =>
         setState((s) => ({ ...s, selectedSurfaceId, selectedSurfacePos: selectedSurfacePos ?? null })),

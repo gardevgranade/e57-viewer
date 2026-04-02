@@ -14,9 +14,17 @@ function fmtArea(m2: number) {
   return `${(m2 / 10000).toFixed(2)} ha`
 }
 
-function groupTotalArea(groupId: string | null, surfaces: PickedSurface[]): number {
+function groupTotalArea(groupId: string, surfaceGroups: SurfaceGroup[], surfaces: PickedSurface[]): number {
+  // Collect all descendant group IDs (BFS)
+  const ids = new Set<string>()
+  const queue = [groupId]
+  while (queue.length) {
+    const cur = queue.shift()!
+    ids.add(cur)
+    surfaceGroups.filter(g => g.parentId === cur).forEach(g => queue.push(g.id))
+  }
   return surfaces
-    .filter(s => s.groupId === groupId && s.area != null)
+    .filter(s => s.groupId != null && ids.has(s.groupId) && s.area != null)
     .reduce((sum, s) => sum + (s.area ?? 0), 0)
 }
 
@@ -198,6 +206,7 @@ export default function SurfacePanel() {
     traceSurfaceMeasure,
     setHoveredSurfaceId,
     selectedSurfaceId, setSelectedSurfaceId,
+    hoveredGroupId, setHoveredGroupId,
     canUndo, canRedo, undo, redo,
     setSurfaceTypeVisible,
   } = useViewer()
@@ -235,9 +244,17 @@ export default function SurfacePanel() {
   }
 
   function toggleGroupVisibility(groupId: string) {
-    const inGroup = surfaces.filter(s => s.groupId === groupId)
-    const anyVisible = inGroup.some(s => s.visible)
-    for (const s of inGroup) updateSurface(s.id, { visible: !anyVisible })
+    // Collect all descendant group IDs
+    const ids = new Set<string>()
+    const queue = [groupId]
+    while (queue.length) {
+      const cur = queue.shift()!
+      ids.add(cur)
+      surfaceGroups.filter(g => g.parentId === cur).forEach(g => queue.push(g.id))
+    }
+    const allInTree = surfaces.filter(s => s.groupId != null && ids.has(s.groupId))
+    const anyVisible = allInTree.some(s => s.visible)
+    for (const s of allInTree) updateSurface(s.id, { visible: !anyVisible })
   }
 
   async function handleDetect() {
@@ -383,12 +400,26 @@ export default function SurfacePanel() {
     return children.map(group => {
       const inGroup = surfaces.filter(s => s.groupId === group.id && matchesFilter(s))
       const collapsed = collapsedGroups.has(group.id)
-      const anyVisible = inGroup.some(s => s.visible)
-      const totalArea = groupTotalArea(group.id, surfaces)
+      // Collect all descendant group IDs for visibility/highlight checks
+      const descIds = new Set<string>()
+      const bfsQ = [group.id]
+      while (bfsQ.length) {
+        const cur = bfsQ.shift()!
+        descIds.add(cur)
+        surfaceGroups.filter(g => g.parentId === cur).forEach(g => bfsQ.push(g.id))
+      }
+      const allInTree = surfaces.filter(s => s.groupId != null && descIds.has(s.groupId))
+      const anyVisible = allInTree.some(s => s.visible)
+      const totalArea = groupTotalArea(group.id, surfaceGroups, surfaces)
       const labelColor = depth === 0 ? '#f59e0b' : '#a5b4fc'
       return (
-        <div key={group.id} style={{
-          background: depth === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.03)',
+        <div key={group.id}
+          onMouseEnter={() => setHoveredGroupId(group.id)}
+          onMouseLeave={() => setHoveredGroupId(null)}
+          style={{
+          background: hoveredGroupId === group.id
+            ? (depth === 0 ? 'rgba(245,158,11,0.12)' : 'rgba(165,180,252,0.10)')
+            : (depth === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.03)'),
           borderRadius: 6, overflow: 'hidden',
           marginLeft: depth * 10,
           border: depth > 0 ? '1px solid rgba(165,180,252,0.12)' : 'none',
@@ -649,8 +680,8 @@ export default function SurfacePanel() {
                     borderBottom: '1px solid rgba(255,255,255,0.06)',
                   }}>
                     <span style={{ flex: 1, color: '#64748b', fontSize: 11, fontWeight: 600 }}>Ungrouped</span>
-                    {groupTotalArea(null, surfaces) > 0 && (
-                      <span style={{ color: '#64748b', fontSize: 10 }}>{fmtArea(groupTotalArea(null, surfaces))}</span>
+                    {ungroupedSurfaces.reduce((s, x) => s + (x.area ?? 0), 0) > 0 && (
+                      <span style={{ color: '#64748b', fontSize: 10 }}>{fmtArea(ungroupedSurfaces.reduce((s, x) => s + (x.area ?? 0), 0))}</span>
                     )}
                     <span style={{ color: '#475569', fontSize: 10 }}>{ungroupedSurfaces.length} surface{ungroupedSurfaces.length !== 1 ? 's' : ''}</span>
                   </div>

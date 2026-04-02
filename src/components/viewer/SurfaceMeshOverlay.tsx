@@ -6,26 +6,43 @@ import { useViewer } from '../../lib/viewerState.js'
 
 /** Renders a semi-transparent coloured overlay mesh for each detected surface (mesh mode only). */
 export default function SurfaceMeshOverlay() {
-  const { surfaces, surfaceColorMode, fileType, hoveredSurfaceId, setHoveredSurfaceId, setSelectedSurface } = useViewer()
+  const { surfaces, surfaceGroups, surfaceColorMode, fileType, hoveredSurfaceId, hoveredGroupId, setHoveredSurfaceId, setSelectedSurface } = useViewer()
 
   const isMesh = fileType && fileType !== 'e57'
   if (!surfaceColorMode || !isMesh) return null
+
+  // Collect all group IDs in the hovered group's subtree
+  const hoveredGroupIds = useMemo(() => {
+    if (!hoveredGroupId) return null
+    const ids = new Set<string>()
+    const queue = [hoveredGroupId]
+    while (queue.length) {
+      const cur = queue.shift()!
+      ids.add(cur)
+      surfaceGroups.filter(g => g.parentId === cur).forEach(g => queue.push(g.id))
+    }
+    return ids
+  }, [hoveredGroupId, surfaceGroups])
 
   return (
     <>
       {surfaces
         .filter((s) => s.visible && s.worldTriangles && s.worldTriangles.length > 0)
-        .map((s) => (
-          <SurfaceOverlayMesh
-            key={s.id}
-            id={s.id}
-            color={s.color}
-            triangles={s.worldTriangles!}
-            hovered={s.id === hoveredSurfaceId}
-            onHover={setHoveredSurfaceId}
-            onSelect={setSelectedSurface}
-          />
-        ))}
+        .map((s) => {
+          const hovered = s.id === hoveredSurfaceId
+            || (hoveredGroupIds != null && s.groupId != null && hoveredGroupIds.has(s.groupId))
+          return (
+            <SurfaceOverlayMesh
+              key={s.id}
+              id={s.id}
+              color={s.color}
+              triangles={s.worldTriangles!}
+              hovered={hovered}
+              onHover={setHoveredSurfaceId}
+              onSelect={setSelectedSurface}
+            />
+          )
+        })}
     </>
   )
 }
