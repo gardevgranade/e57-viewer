@@ -68,7 +68,8 @@ function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: nu
         return (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-center gap-2 rounded-lg border px-3 py-2 text-xs text-white/90 shadow-lg backdrop-blur-md animate-in slide-in-from-right ${s.bg} ${s.border}`}
+            className={`pointer-events-auto flex items-center gap-2 rounded-lg border px-3 py-2 text-xs text-white/90 shadow-lg backdrop-blur-md transition-all ${s.bg} ${s.border}`}
+            style={{ animation: 'slideInRight 0.2s ease-out' }}
           >
             <span className="shrink-0 text-sm">{s.icon}</span>
             <span className="flex-1">{t.message}</span>
