@@ -88,6 +88,8 @@ export interface ViewerActions {
   addSurface: (s: PickedSurface) => void
   removeSurface: (id: string) => void
   replaceSurface: (id: string, replacements: PickedSurface[]) => void
+  /** Set visible=true/false for all surfaces whose label starts with the given prefix (case-insensitive) */
+  setSurfaceTypeVisible: (typePrefix: string, visible: boolean) => void
   addGroup: (g: SurfaceGroup) => void
   removeGroup: (id: string) => void
   updateGroup: (id: string, patch: Partial<Pick<SurfaceGroup, 'label'>>) => void
@@ -253,6 +255,15 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
           next.splice(idx, 1, ...replacements)
           return { ...s, surfaces: next }
         }),
+      setSurfaceTypeVisible: (typePrefix, visible) =>
+        setStateUndoable(s => ({
+          ...s,
+          surfaces: s.surfaces.map(surf =>
+            surf.label.toLowerCase().startsWith(typePrefix.toLowerCase())
+              ? { ...surf, visible }
+              : surf,
+          ),
+        })),
       addGroup: (group: SurfaceGroup) =>
         setStateUndoable(s => ({ ...s, surfaceGroups: [...s.surfaceGroups, group] })),
       removeGroup: (id) =>

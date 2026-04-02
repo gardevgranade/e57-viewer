@@ -199,6 +199,7 @@ export default function SurfacePanel() {
     setHoveredSurfaceId,
     selectedSurfaceId, setSelectedSurfaceId,
     canUndo, canRedo, undo, redo,
+    setSurfaceTypeVisible,
   } = useViewer()
 
   const [detecting, setDetecting] = useState(false)
@@ -511,6 +512,32 @@ export default function SurfacePanel() {
                   {meshVisible ? '👁 Model' : '🙈 Model'}
                 </button>
               )}
+            </div>
+          )}
+          {/* ── Per-type visibility toggles ── */}
+          {surfaces.length > 0 && (['roof', 'floor', 'wall'] as const).some(t =>
+            surfaces.some(s => s.label.toLowerCase().startsWith(t))
+          ) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+              {(['Roof', 'Floor', 'Wall'] as const).map(type => {
+                const ofType = surfaces.filter(s => s.label.toLowerCase().startsWith(type.toLowerCase()))
+                if (!ofType.length) return null
+                const allVisible = ofType.every(s => s.visible)
+                return (
+                  <button key={type}
+                    onClick={() => setSurfaceTypeVisible(type, !allVisible)}
+                    title={`${allVisible ? 'Hide' : 'Show'} all ${type}s`}
+                    style={{
+                      padding: '1px 7px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                      background: allVisible ? 'transparent' : '#1e293b',
+                      border: `1px solid ${allVisible ? '#334155' : '#7c3aed'}`,
+                      borderRadius: 10,
+                      color: allVisible ? '#64748b' : '#c4b5fd',
+                    }}>
+                    {allVisible ? '👁' : '🙈'} {type}s
+                  </button>
+                )
+              })}
             </div>
           )}
 
