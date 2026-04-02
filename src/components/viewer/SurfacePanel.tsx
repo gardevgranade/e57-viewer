@@ -198,6 +198,7 @@ export default function SurfacePanel() {
     traceSurfaceMeasure,
     setHoveredSurfaceId,
     selectedSurfaceId, setSelectedSurfaceId,
+    canUndo, canRedo, undo, redo,
   } = useViewer()
 
   const [detecting, setDetecting] = useState(false)
@@ -465,12 +466,22 @@ export default function SurfacePanel() {
       <div style={{ padding: '10px 12px 0', flexShrink: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: open ? 8 : 10 }}>
         <span style={{ fontWeight: 700, fontSize: 13 }}>Surfaces</span>
-        <button
-          onClick={() => setOpen(o => !o)}
-          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
-        >
-          {open ? '▲' : '▼'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button onClick={undo} disabled={!canUndo} title="Undo (⌘Z)"
+            style={{ background: 'none', border: 'none', cursor: canUndo ? 'pointer' : 'default', fontSize: 14, lineHeight: 1, color: canUndo ? '#94a3b8' : '#334155', padding: '0 2px' }}>
+            ↩
+          </button>
+          <button onClick={redo} disabled={!canRedo} title="Redo (⌘⇧Z)"
+            style={{ background: 'none', border: 'none', cursor: canRedo ? 'pointer' : 'default', fontSize: 14, lineHeight: 1, color: canRedo ? '#94a3b8' : '#334155', padding: '0 2px' }}>
+            ↪
+          </button>
+          <button
+            onClick={() => setOpen(o => !o)}
+            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
+          >
+            {open ? '▲' : '▼'}
+          </button>
+        </div>
       </div>
       </div>{/* end header */}
 

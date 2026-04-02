@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { BoundingBox } from '../lib/jobStore.js'
 
@@ -58,6 +58,8 @@ export interface ViewerState {
   /** When serial changes, MeasureTool will pre-populate with these points */
   measureTraceSerial: number
   measureTracePts: Array<{ x: number; y: number; z: number }>
+  canUndo: boolean
+  canRedo: boolean
 }
 
 export interface ViewerActions {
@@ -96,6 +98,8 @@ export interface ViewerActions {
   setSelectedSurfaceId: (id: string | null) => void
   setSelectedSurface: (id: string | null, pos?: { x: number; y: number }) => void
   traceSurfaceMeasure: (pts: Array<{ x: number; y: number; z: number }>) => void
+  undo: () => void
+  redo: () => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
     matrixWorld: THREE.Matrix4
@@ -154,6 +158,8 @@ const initialState: ViewerState = {
   selectedSurfacePos: null,
   measureTraceSerial: 0,
   measureTracePts: [],
+  canUndo: false,
+  canRedo: false,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -169,11 +175,26 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
 
   const meshObjectRef = useRef<THREE.Object3D | null>(null)
 
+  // Undo / redo stacks — stored in refs to avoid triggering re-renders on push
+  type UndoSlice = Pick<ViewerState, 'surfaces' | 'surfaceGroups'>
+  const historyRef = useRef<UndoSlice[]>([])
+  const futureRef = useRef<UndoSlice[]>([])
+
   // Memoize actions so their references are stable across re-renders.
   // All actions use the functional setState form, so no state is closed over
   // and setState itself is guaranteed stable by React.
   const actions = useMemo<Omit<ViewerActions, 'pointCloudGeoRef' | 'meshObjectRef'>>(
-    () => ({
+    () => {
+      /** Push current undoable slice to history, clear redo stack */
+      function setStateUndoable(updater: (s: ViewerState) => ViewerState) {
+        setState(s => {
+          historyRef.current = [...historyRef.current.slice(-49), { surfaces: s.surfaces, surfaceGroups: s.surfaceGroups }]
+          futureRef.current = []
+          return { ...updater(s), canUndo: true, canRedo: false }
+        })
+      }
+
+      return {
       setUploading: (fileName, fileSize) =>
         setState((s) => ({
           ...s,
@@ -210,22 +231,22 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
       setFileType: (fileType) => setState((s) => ({ ...s, fileType })),
       setMeasureActive: (measureActive) => setState((s) => ({ ...s, measureActive })),
       setSurfaces: (surfaces) =>
-        setState((s) => ({ ...s, surfaces, surfaceColorMode: surfaces.length > 0 })),
+        setStateUndoable(s => ({ ...s, surfaces, surfaceColorMode: surfaces.length > 0 })),
       updateSurface: (id, patch) =>
-        setState((s) => ({
+        setStateUndoable(s => ({
           ...s,
           surfaces: s.surfaces.map(surf => surf.id === id ? { ...surf, ...patch } : surf),
         })),
       addSurface: (surface) =>
-        setState((s) => ({
+        setStateUndoable(s => ({
           ...s,
           surfaces: [...s.surfaces, surface],
           surfaceColorMode: true,
         })),
       removeSurface: (id) =>
-        setState((s) => ({ ...s, surfaces: s.surfaces.filter(surf => surf.id !== id) })),
+        setStateUndoable(s => ({ ...s, surfaces: s.surfaces.filter(surf => surf.id !== id) })),
       replaceSurface: (id, replacements) =>
-        setState((s) => {
+        setStateUndoable(s => {
           const idx = s.surfaces.findIndex(surf => surf.id === id)
           if (idx === -1) return s
           const next = [...s.surfaces]
@@ -233,9 +254,9 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
           return { ...s, surfaces: next }
         }),
       addGroup: (group: SurfaceGroup) =>
-        setState((s) => ({ ...s, surfaceGroups: [...s.surfaceGroups, group] })),
+        setStateUndoable(s => ({ ...s, surfaceGroups: [...s.surfaceGroups, group] })),
       removeGroup: (id) =>
-        setState((s) => {
+        setStateUndoable(s => {
           // Collect this group + all descendants
           const toRemove = new Set<string>()
           const queue = [id]
@@ -253,7 +274,7 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
           }
         }),
       updateGroup: (id, patch) =>
-        setState((s) => ({
+        setStateUndoable(s => ({
           ...s,
           surfaceGroups: s.surfaceGroups.map(g => g.id === id ? { ...g, ...patch } : g),
         })),
@@ -266,7 +287,23 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
         setState((s) => ({ ...s, selectedSurfaceId, selectedSurfacePos: selectedSurfacePos ?? null })),
       traceSurfaceMeasure: (pts) =>
         setState((s) => ({ ...s, measureTracePts: pts, measureTraceSerial: s.measureTraceSerial + 1 })),
-    }),
+      undo: () =>
+        setState(s => {
+          if (!historyRef.current.length) return s
+          const prev = historyRef.current[historyRef.current.length - 1]
+          historyRef.current = historyRef.current.slice(0, -1)
+          futureRef.current = [{ surfaces: s.surfaces, surfaceGroups: s.surfaceGroups }, ...futureRef.current.slice(0, 49)]
+          return { ...s, ...prev, canUndo: historyRef.current.length > 0, canRedo: true }
+        }),
+      redo: () =>
+        setState(s => {
+          if (!futureRef.current.length) return s
+          const next = futureRef.current[0]
+          futureRef.current = futureRef.current.slice(1)
+          historyRef.current = [...historyRef.current.slice(-49), { surfaces: s.surfaces, surfaceGroups: s.surfaceGroups }]
+          return { ...s, ...next, canUndo: true, canRedo: futureRef.current.length > 0 }
+        }),
+    }},
     [],
   )
 
@@ -274,6 +311,17 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
     () => ({ ...state, ...actions, pointCloudGeoRef, meshObjectRef }),
     [state, actions, pointCloudGeoRef, meshObjectRef],
   )
+
+  // Global keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); actions.undo() }
+      if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); actions.redo() }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [actions])
 
   return (
     <ViewerContext.Provider value={value}>
