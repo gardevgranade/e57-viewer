@@ -351,13 +351,16 @@ export default function SurfacePanel() {
       position: 'absolute', top: 12, left: 12, zIndex: 10,
       background: 'rgba(13,17,23,0.90)',
       border: '1px solid rgba(255,255,255,0.08)',
-      borderRadius: 10, padding: '10px 12px',
+      borderRadius: 10,
       minWidth: 248, maxWidth: 288,
+      maxHeight: 'calc(100vh - 24px)',
+      display: 'flex', flexDirection: 'column',
       backdropFilter: 'blur(8px)',
       fontFamily: 'system-ui, sans-serif', fontSize: 12, color: '#e2e8f0',
     }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: open ? 8 : 0 }}>
+      {/* Header — always visible */}
+      <div style={{ padding: '10px 12px 0', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: open ? 8 : 10 }}>
         <span style={{ fontWeight: 700, fontSize: 13 }}>Surfaces</span>
         <button
           onClick={() => setOpen(o => !o)}
@@ -366,8 +369,10 @@ export default function SurfacePanel() {
           {open ? '▲' : '▼'}
         </button>
       </div>
+      </div>{/* end header */}
 
       {open && (
+        <div style={{ overflowY: 'auto', padding: '0 12px 10px', flex: 1, minHeight: 0 }}>
         <>
           {/* ── Filter pills + hide model ── */}
           {surfaces.length > 0 && (
@@ -453,7 +458,7 @@ export default function SurfacePanel() {
 
           {/* ── Surface list ── */}
           {surfaces.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 340, overflowY: 'auto', marginBottom: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
 
               {/* Groups */}
               {surfaceGroups.map(group => {
@@ -597,6 +602,7 @@ export default function SurfacePanel() {
             </button>
           )}
         </>
+        </div>
       )}
     </div>
   )
