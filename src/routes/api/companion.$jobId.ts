@@ -49,13 +49,17 @@ export const Route = createFileRoute('/api/companion/$jobId')({
 
           // Parse MTL to extract texture file references
           const texRefs = new Set<string>()
-          const texKeywords = ['map_Ka', 'map_Kd', 'map_Ks', 'map_Ns', 'map_d', 'map_bump', 'bump', 'disp', 'decal', 'refl', 'norm', 'map_Pr', 'map_Pm', 'map_Ke']
+          const texKeywords = ['map_Ka', 'map_Kd', 'map_Ks', 'map_Ns', 'map_d', 'map_bump', 'map_Bump', 'bump', 'Bump', 'disp', 'decal', 'refl', 'norm', 'map_Pr', 'map_Pm', 'map_Ke']
           for (const line of mtlText.split('\n')) {
             const trimmed = line.trim()
             for (const kw of texKeywords) {
               if (trimmed.startsWith(kw + ' ') || trimmed.startsWith(kw + '\t')) {
-                const parts = trimmed.split(/\s+/)
-                const texFile = parts[parts.length - 1].replace(/\\/g, '/')
+                // Take everything after the keyword (preserves spaces in filenames)
+                let texFile = trimmed.slice(kw.length).trim()
+                // Strip MTL options (e.g. -bm 1.0, -s 1 1 1) that precede the filename
+                texFile = texFile.replace(/^(-\w+\s+[\d.]+(\s+[\d.]+)*\s*)+/, '').trim()
+                // Normalize backslashes and collapse doubles
+                texFile = texFile.replace(/\\/g, '/').replace(/\/+/g, '/')
                 if (texFile) texRefs.add(texFile)
               }
             }
