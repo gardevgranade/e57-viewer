@@ -11,7 +11,6 @@ import PointCloud from './PointCloud.js'
 import MeshOverlay from './MeshOverlay.js'
 import MeshModel from './MeshModel.js'
 import MeasureTool from './MeasureTool.js'
-import ViewerControls from './ViewerControls.js'
 import FlyCamera, { type FlyCameraHandle } from './FlyCamera.js'
 import SurfacePanel from './SurfacePanel.js'
 import SurfaceMeshOverlay from './SurfaceMeshOverlay.js'
@@ -21,18 +20,17 @@ import LassoTool from './LassoTool.js'
 import LassoOverlay from './LassoOverlay.js'
 import BoxSelectTool from './BoxSelectTool.js'
 import LightSimulation from './LightSimulation.js'
-import LightPanel from './LightPanel.js'
 import PositioningGizmo from './PositioningGizmo.js'
 import ModelContextCard from './ModelContextCard.js'
-import PositioningPanel from './PositioningPanel.js'
 import Toolbar from './Toolbar.js'
-import StatusBar from './StatusBar.js'
+import HeaderBar from './HeaderBar.js'
+import RightPanel from './RightPanel.js'
 import ShortcutsOverlay from './ShortcutsOverlay.js'
-import CameraViewBar from './CameraViewBar.js'
 import CameraViewBridge, { triggerCameraView, triggerScreenshot } from './CameraViewBridge.js'
 import FPSMonitor, { useFPSCallback } from './FPSMonitor.js'
 import DragDropZone from './DragDropZone.js'
 import WelcomeScreen from './WelcomeScreen.js'
+import MeasureHintBar from './MeasureHintBar.js'
 
 function SceneGrid() {
   const { bbox } = useViewer()
@@ -141,18 +139,18 @@ export default function ViewerCanvas() {
     setMeasureActive, setPickSurfaceMode, setLassoMode, setPositioningMode, setMeshVisible, handleScreenshot])
 
   return (
-    <div className="flex h-full">
-      {/* Left toolbar */}
-      <Toolbar
-        onScreenshot={handleScreenshot}
-        onExportCSV={handleExportCSV}
-        onShowShortcuts={() => setShowShortcuts(true)}
-      />
+    <div className="flex h-full flex-col">
+      {/* Top header bar */}
+      <HeaderBar />
 
-      {/* Main area */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1">
+        {/* Left toolbar */}
+        <Toolbar
+          onShowShortcuts={() => setShowShortcuts(true)}
+        />
+
         {/* Viewport */}
-        <div className="relative min-h-0 flex-1 overflow-hidden bg-[#0d1117]">
+        <div className="relative min-w-0 flex-1 overflow-hidden bg-[#0d1117]">
           {!isActive && <WelcomeScreen />}
 
           <Canvas
@@ -198,28 +196,23 @@ export default function ViewerCanvas() {
             </GizmoHelper>
           </Canvas>
 
-          {/* DOM overlays */}
-          <ViewerControls />
-          <SurfacePanel />
+          {/* Minimal viewport overlays */}
           <SurfaceTooltip />
           <LassoOverlay />
           <ModelContextCard />
-          <PositioningPanel />
-          <LightPanel />
+          <MeasureHintBar />
 
-          {/* Camera view presets bar */}
-          {isDone && <CameraViewBar onView={triggerCameraView} />}
-        </div>
-
-        {/* Status bar */}
-        <div className="flex h-7 shrink-0 items-center border-t border-white/[0.06] bg-[#0c1017]">
-          <div className="flex-1">
-            <StatusBar />
-          </div>
-          <div className="shrink-0 pr-2">
+          {/* File upload (bottom-center) */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30">
             <DragDropZone />
           </div>
         </div>
+
+        {/* Right properties panel */}
+        <RightPanel onScreenshot={handleScreenshot} onExportCSV={handleExportCSV} />
+
+        {/* Surface panel (still its own component due to complexity) */}
+        <SurfacePanel />
       </div>
 
       {/* Shortcuts overlay */}
