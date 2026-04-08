@@ -197,6 +197,7 @@ export default function ViewerCanvas() {
           </Canvas>
 
           {/* Minimal viewport overlays */}
+          <SurfacePanel />
           <SurfaceTooltip />
           <LassoOverlay />
           <ModelContextCard />
@@ -210,9 +211,6 @@ export default function ViewerCanvas() {
 
         {/* Right properties panel */}
         <RightPanel onScreenshot={handleScreenshot} onExportCSV={handleExportCSV} />
-
-        {/* Surface panel (still its own component due to complexity) */}
-        <SurfacePanel />
       </div>
 
       {/* Shortcuts overlay */}
