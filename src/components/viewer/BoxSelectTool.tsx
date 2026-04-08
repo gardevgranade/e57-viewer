@@ -74,11 +74,16 @@ export default function BoxSelectTool({ flyCameraRef }: BoxSelectToolProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [boxSelectMode, setBoxSelectMode])
 
+  // Lock camera while box is placed
+  useEffect(() => {
+    if (!boxCenter) return
+    flyCameraRef.current?.setMeasureMode(true)
+    return () => { flyCameraRef.current?.setMeasureMode(false) }
+  }, [boxCenter, flyCameraRef])
+
   // Face drag for resizing via ray-plane intersection
   useEffect(() => {
     if (!draggingFace || !boxCenter) return
-
-    flyCameraRef.current?.setMeasureMode(true)
 
     const axisChar = draggingFace[1] as 'x' | 'y' | 'z'
     const axisIndex = axisChar === 'x' ? 0 : axisChar === 'y' ? 1 : 2
@@ -115,7 +120,6 @@ export default function BoxSelectTool({ flyCameraRef }: BoxSelectToolProps) {
 
     const onUp = () => {
       setDraggingFace(null)
-      flyCameraRef.current?.setMeasureMode(false)
     }
 
     window.addEventListener('pointermove', onMove)
@@ -347,17 +351,14 @@ export default function BoxSelectTool({ flyCameraRef }: BoxSelectToolProps) {
         </mesh>
       ))}
 
-      {/* Action bar */}
-      <Html
-        position={[boxCenter.x, boxCenter.y + boxSize.y / 2 + handleSize * 3, boxCenter.z]}
-        center
-        occlude={false}
-      >
+      {/* Action bar — fixed at bottom center of screen */}
+      <Html center position={[0, 0, 0]} style={{ pointerEvents: 'none' }}>
         <div style={{
-          display: 'flex', gap: 8, alignItems: 'center',
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          display: 'flex', gap: 8, alignItems: 'center', pointerEvents: 'auto',
           background: 'rgba(15,15,25,0.95)', border: '1px solid rgba(255,255,255,0.15)',
-          borderRadius: 10, padding: '6px 12px', fontFamily: 'system-ui', fontSize: 12,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          borderRadius: 10, padding: '6px 14px', fontFamily: 'system-ui', fontSize: 12,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)', whiteSpace: 'nowrap',
         }}>
           <span style={{ color: '#999', marginRight: 4 }}>
             {pointsInside > 0 ? `~${pointsInside.toLocaleString()} items` : 'Resize with handles'}

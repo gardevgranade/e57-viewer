@@ -6,10 +6,13 @@ import { useViewer } from '../../lib/viewerState.js'
 
 /** Renders a semi-transparent coloured overlay mesh for each detected surface (mesh mode only). */
 export default function SurfaceMeshOverlay() {
-  const { surfaces, surfaceGroups, surfaceColorMode, fileType, hoveredSurfaceId, hoveredGroupId, setHoveredSurfaceId, setSelectedSurface } = useViewer()
+  const { surfaces, surfaceGroups, surfaceColorMode, fileType, hoveredSurfaceId, hoveredGroupId, setHoveredSurfaceId, setSelectedSurface, boxSelectMode } = useViewer()
 
   const isMesh = fileType && fileType !== 'e57'
   if (!surfaceColorMode || !isMesh) return null
+
+  // Suppress hover/select interactions when box select tool is active
+  const interactionsDisabled = !!boxSelectMode
 
   // Collect all group IDs in the hovered group's subtree
   const hoveredGroupIds = useMemo(() => {
@@ -29,8 +32,8 @@ export default function SurfaceMeshOverlay() {
       {surfaces
         .filter((s) => s.visible && s.worldTriangles && s.worldTriangles.length > 0)
         .map((s) => {
-          const hovered = s.id === hoveredSurfaceId
-            || (hoveredGroupIds != null && s.groupId != null && hoveredGroupIds.has(s.groupId))
+          const hovered = !interactionsDisabled && (s.id === hoveredSurfaceId
+            || (hoveredGroupIds != null && s.groupId != null && hoveredGroupIds.has(s.groupId)))
           return (
             <SurfaceOverlayMesh
               key={s.id}
@@ -38,8 +41,8 @@ export default function SurfaceMeshOverlay() {
               color={s.color}
               triangles={s.worldTriangles!}
               hovered={hovered}
-              onHover={setHoveredSurfaceId}
-              onSelect={setSelectedSurface}
+              onHover={interactionsDisabled ? () => {} : setHoveredSurfaceId}
+              onSelect={interactionsDisabled ? () => {} : setSelectedSurface}
             />
           )
         })}

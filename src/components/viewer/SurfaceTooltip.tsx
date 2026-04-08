@@ -44,6 +44,7 @@ export default function SurfaceTooltip() {
     traceSurfaceMeasure,
     surfaceGroups, addGroup,
     measureActive,
+    boxSelectMode,
   } = useViewer()
 
   const tooltipRef = useRef<HTMLDivElement>(null)
@@ -69,7 +70,7 @@ export default function SurfaceTooltip() {
     return () => window.removeEventListener('keydown', onKey)
   }, [selectedSurfaceId, setSelectedSurfaceId])
 
-  if (!surf || !selectedSurfaceId || measureActive) return null
+  if (!surf || !selectedSurfaceId || measureActive || boxSelectMode) return null
 
   const isRoofOrFloor = /^(roof|floor)/i.test(surf.label)
   const type = surf.label.toLowerCase().startsWith('roof') ? 'roof'
