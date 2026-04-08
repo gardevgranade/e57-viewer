@@ -60,6 +60,7 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
     const isInitialLoad = streamStatus === 'streaming'
     const isReload = modelVersion > lastLoadedVersionRef.current && streamStatus === 'done'
     if (!jobId || fileType === 'e57' || !fileType || (!isInitialLoad && !isReload)) return
+    console.log(`[MeshModel] ${isReload ? 'RELOAD' : 'INITIAL'} load, modelVersion=${modelVersion}`)
     lastLoadedVersionRef.current = modelVersion
 
     let cancelled = false
@@ -96,6 +97,7 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
               const mtlLoader = new MTLLoader()
               // Custom LoadingManager: redirect texture URLs to our API + log errors
               const manager = new THREE.LoadingManager()
+              const failedTextures = new Set<string>()
               manager.setURLModifier((texUrl) => {
                 // Normalize Windows backslashes, strip leading ./ or /, collapse double slashes
                 const name = texUrl.replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '').replace(/\/+/g, '/')
@@ -105,6 +107,15 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
               })
               manager.onError = (url) => {
                 console.warn(`[MeshModel] ⚠ Failed to load texture: ${url}`)
+                failedTextures.add(url)
+                // Strip failed texture maps from materials so the model isn't rendered dark
+                for (const mat of Object.values(materials!.materials)) {
+                  const m = mat as THREE.MeshPhongMaterial
+                  if (m.map) {
+                    m.map = null
+                    m.needsUpdate = true
+                  }
+                }
               }
               mtlLoader.manager = manager
               materials = mtlLoader.parse(mtlText, '')
