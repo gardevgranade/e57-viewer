@@ -24,7 +24,6 @@ export default function BoxSelectTool({ flyCameraRef }: BoxSelectToolProps) {
   const [draggingFace, setDraggingFace] = useState<string | null>(null)
   const [pointsInside, setPointsInside] = useState(0)
   const boxRef = useRef<THREE.Mesh>(null)
-  const dragStartRef = useRef<{ mouse: THREE.Vector2; size: THREE.Vector3 } | null>(null)
 
   // Compute default box size from model bbox
   const defaultSize = useCallback(() => {
@@ -75,47 +74,57 @@ export default function BoxSelectTool({ flyCameraRef }: BoxSelectToolProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [boxSelectMode, setBoxSelectMode])
 
-  // Face drag for resizing
+  // Face drag for resizing via ray-plane intersection
   useEffect(() => {
     if (!draggingFace || !boxCenter) return
 
     flyCameraRef.current?.setMeasureMode(true)
 
+    const axisChar = draggingFace[1] as 'x' | 'y' | 'z'
+    const axisIndex = axisChar === 'x' ? 0 : axisChar === 'y' ? 1 : 2
+    const rc = new THREE.Raycaster()
+
     const onMove = (e: PointerEvent) => {
-      if (!dragStartRef.current) return
       const rect = gl.domElement.getBoundingClientRect()
       const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
       const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1
+      rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
 
-      const mouse = new THREE.Vector2(ndcX, ndcY)
-      const delta = mouse.clone().sub(dragStartRef.current.mouse)
-      const startSize = dragStartRef.current.size
+      // Build a plane through boxCenter that contains the drag axis
+      // and is as perpendicular to the view direction as possible
+      const axis = new THREE.Vector3()
+      axis.setComponent(axisIndex, 1)
 
-      // Scale factor based on drag distance
-      const scale = 1 + delta.x * 2 + delta.y * 2
+      const viewDir = camera.getWorldDirection(new THREE.Vector3())
+      const planeNormal = new THREE.Vector3().crossVectors(axis, viewDir).cross(axis)
+      if (planeNormal.lengthSq() < 1e-6) planeNormal.copy(viewDir)
+      planeNormal.normalize()
 
-      setBoxSize(() => {
-        const next = startSize.clone()
-        if (draggingFace === '+x' || draggingFace === '-x') next.x = Math.max(0.05, startSize.x * Math.abs(scale))
-        if (draggingFace === '+y' || draggingFace === '-y') next.y = Math.max(0.05, startSize.y * Math.abs(scale))
-        if (draggingFace === '+z' || draggingFace === '-z') next.z = Math.max(0.05, startSize.z * Math.abs(scale))
-        return next
-      })
+      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, boxCenter)
+      const hit = new THREE.Vector3()
+      if (rc.ray.intersectPlane(plane, hit)) {
+        const dist = Math.abs(hit.getComponent(axisIndex) - boxCenter.getComponent(axisIndex))
+        const newAxisSize = Math.max(0.05, dist * 2)
+        setBoxSize(prev => {
+          const next = prev.clone()
+          next.setComponent(axisIndex, newAxisSize)
+          return next
+        })
+      }
     }
 
     const onUp = () => {
       setDraggingFace(null)
-      dragStartRef.current = null
       flyCameraRef.current?.setMeasureMode(false)
     }
 
-    gl.domElement.addEventListener('pointermove', onMove)
-    gl.domElement.addEventListener('pointerup', onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
     return () => {
-      gl.domElement.removeEventListener('pointermove', onMove)
-      gl.domElement.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
     }
-  }, [draggingFace, boxCenter, gl, flyCameraRef])
+  }, [draggingFace, boxCenter, gl, camera, flyCameraRef])
 
   // Count points/triangles inside box (throttled)
   const countFrameRef = useRef(0)
@@ -330,12 +339,7 @@ export default function BoxSelectTool({ flyCameraRef }: BoxSelectToolProps) {
           userData={{ isBoxSelect: true }}
           onPointerDown={(e) => {
             e.stopPropagation()
-            const rect = gl.domElement.getBoundingClientRect()
-            const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
-            const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1
-            dragStartRef.current = { mouse: new THREE.Vector2(ndcX, ndcY), size: boxSize.clone() }
             setDraggingFace(f.id)
-            gl.domElement.setPointerCapture(e.pointerId)
           }}
         >
           <sphereGeometry args={[handleSize, 8, 8]} />
