@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useViewer } from '../../lib/viewerState.js'
 import type { PickedSurface, SurfaceGroup } from '../../lib/viewerState.js'
-import { detectSurfaces } from '../../lib/surfaceDetect.js'
-import { detectMeshSurfaces, splitSurfaceTriangles } from '../../lib/meshSurfaceDetect.js'
+import { detectSurfacesAsync, detectMeshSurfacesAsync } from '../../lib/detectAsync.js'
+import { splitSurfaceTriangles } from '../../lib/meshSurfaceDetect.js'
 import { extractBoundaryPolygon } from '../../lib/surfaceBoundary.js'
 import { useUnits } from '../../lib/units.js'
 import * as THREE from 'three'
@@ -258,7 +258,6 @@ export default function SurfacePanel() {
 
   async function handleDetect() {
     setDetecting(true)
-    await new Promise(r => setTimeout(r, 30))
     try {
       const geoData = pointCloudGeoRef.current
       if (!geoData) return
@@ -272,7 +271,7 @@ export default function SurfacePanel() {
         worldPos[i * 3 + 1] = v.y
         worldPos[i * 3 + 2] = v.z
       }
-      const detected = detectSurfaces(worldPos, count)
+      const detected = await detectSurfacesAsync(worldPos, count)
       const picked: PickedSurface[] = detected.map(d => ({
         id: d.id,
         label: d.label,
@@ -296,9 +295,8 @@ export default function SurfacePanel() {
     const obj = meshObjectRef.current
     if (!obj) return
     setDetecting(true)
-    await new Promise(r => setTimeout(r, 30))
     try {
-      const detected = detectMeshSurfaces(obj)
+      const detected = await detectMeshSurfacesAsync(obj)
       const picked: PickedSurface[] = detected.map(d => ({
         id: d.id, label: d.label, color: d.color, visible: d.visible,
         groupId: null, area: d.area, worldTriangles: d.worldTriangles,
