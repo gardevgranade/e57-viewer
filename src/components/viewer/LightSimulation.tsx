@@ -92,7 +92,11 @@ export default function LightSimulation() {
         receiveShadow
       >
         <planeGeometry args={[groundSize, groundSize]} />
-        <shadowMaterial opacity={0.3} />
+        <meshStandardMaterial
+          color={0x1a1f2e}
+          roughness={0.9}
+          metalness={0}
+        />
       </mesh>
 
       {/* Sun position indicator (small yellow sphere) */}
