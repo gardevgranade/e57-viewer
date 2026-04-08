@@ -124,7 +124,8 @@ export const Route = createFileRoute('/api/model/$jobId')({
               headers: { 'content-type': 'application/json' },
             })
           }
-          const safe = normalize(textureName).replace(/\.\./g, '').replace(/^\/+/, '')
+          // Normalize Windows backslashes to forward slashes, then sanitize
+          const safe = normalize(textureName.replace(/\\/g, '/')).replace(/\.\./g, '').replace(/^\/+/, '')
           let texPath = resolve(job.textureDir, safe)
 
           // Security: ensure resolved path is inside textureDir
