@@ -98,10 +98,11 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
               // Custom LoadingManager: redirect texture URLs to our API + log errors
               const manager = new THREE.LoadingManager()
               const failedTextures = new Set<string>()
+              const cacheBust = Date.now()
               manager.setURLModifier((texUrl) => {
                 // Normalize Windows backslashes, strip leading ./ or /, collapse double slashes
                 const name = texUrl.replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '').replace(/\/+/g, '/')
-                const resolved = `/api/model/${jobId}?texture=${encodeURIComponent(name)}`
+                const resolved = `/api/model/${jobId}?texture=${encodeURIComponent(name)}&_t=${cacheBust}`
                 console.log(`[MeshModel] Texture URL: "${texUrl}" → "${resolved}"`)
                 return resolved
               })

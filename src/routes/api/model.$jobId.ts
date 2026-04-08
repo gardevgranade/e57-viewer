@@ -123,7 +123,7 @@ export const Route = createFileRoute('/api/model/$jobId')({
           if (!job.textureDir) {
             return new Response(JSON.stringify({ error: 'No textures for this job' }), {
               status: 404,
-              headers: { 'content-type': 'application/json' },
+              headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
             })
           }
           // Normalize Windows backslashes to forward slashes, then sanitize
@@ -134,7 +134,7 @@ export const Route = createFileRoute('/api/model/$jobId')({
           if (!texPath.startsWith(resolve(job.textureDir))) {
             return new Response(JSON.stringify({ error: 'Texture not found' }), {
               status: 404,
-              headers: { 'content-type': 'application/json' },
+              headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
             })
           }
 
@@ -147,7 +147,7 @@ export const Route = createFileRoute('/api/model/$jobId')({
             } else {
               return new Response(JSON.stringify({ error: 'Texture not found' }), {
                 status: 404,
-                headers: { 'content-type': 'application/json' },
+                headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
               })
             }
           }
