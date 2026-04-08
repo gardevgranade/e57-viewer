@@ -54,17 +54,35 @@ export const Route = createFileRoute('/api/upload')({
 
         // Optionally accept a companion .mtl file for OBJ uploads
         let mtlPath: string | undefined
+        let requiredTextures: string[] = []
         const mtlFile = formData.get('mtl')
         if (fileType === 'obj' && mtlFile instanceof File) {
           const mtlBytes = await mtlFile.arrayBuffer()
           mtlPath = join(tmpdir(), `model-upload-${randomUUID()}.mtl`)
           await writeFile(mtlPath, Buffer.from(mtlBytes))
+
+          // Parse MTL for texture references
+          const mtlText = Buffer.from(mtlBytes).toString('utf-8')
+          const texRefs = new Set<string>()
+          const texKeywords = ['map_Ka', 'map_Kd', 'map_Ks', 'map_Ns', 'map_d', 'map_bump', 'map_Bump', 'bump', 'Bump', 'disp', 'decal', 'refl', 'norm', 'map_Pr', 'map_Pm', 'map_Ke']
+          for (const line of mtlText.split('\n')) {
+            const trimmed = line.trim()
+            for (const kw of texKeywords) {
+              if (trimmed.startsWith(kw + ' ') || trimmed.startsWith(kw + '\t')) {
+                let texFile = trimmed.slice(kw.length).trim()
+                texFile = texFile.replace(/^(-\w+\s+[\d.]+(\s+[\d.]+)*\s*)+/, '').trim()
+                texFile = texFile.replace(/\\/g, '/').replace(/\/+/g, '/')
+                if (texFile) texRefs.add(texFile)
+              }
+            }
+          }
+          requiredTextures = [...texRefs]
         }
 
         const job = createJob(filePath, fileType, mtlPath)
 
         return new Response(
-          JSON.stringify({ jobId: job.id, fileName: file.name, size: file.size, fileType, hasMtl: !!mtlPath }),
+          JSON.stringify({ jobId: job.id, fileName: file.name, size: file.size, fileType, hasMtl: !!mtlPath, requiredTextures }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       },

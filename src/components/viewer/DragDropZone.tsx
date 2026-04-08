@@ -63,6 +63,15 @@ export default function DragDropZone() {
           return
         }
         if (json.hasMtl) setHasMtl(true)
+        // Handle texture refs from initial MTL upload
+        const texPaths: string[] = json.requiredTextures ?? []
+        if (texPaths.length > 0) {
+          setRequiredTextures(texPaths)
+          const folders = texPaths.map((p: string) => p.includes('/') ? p.slice(0, p.lastIndexOf('/') + 1) : '')
+          const commonFolder = folders[0] && folders.every((f: string) => f === folders[0]) ? folders[0] : null
+          setTextureFolder(commonFolder)
+          console.log(`[DragDrop] Initial upload: MTL needs ${texPaths.length} textures, common folder: ${commonFolder}`)
+        }
         setFileType(json.fileType ?? ext)
         setJobId(json.jobId)
         setStreamStatus('streaming')
