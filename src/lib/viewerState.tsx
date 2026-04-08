@@ -85,6 +85,8 @@ export interface ViewerState {
   sunPosition: [number, number, number]
   sunIntensity: number
   ambientIntensity: number
+  viewLayout: 'single' | 'quad'
+  maximizedView: 'top' | 'front' | 'left' | 'perspective' | null
 }
 
 export interface ViewerActions {
@@ -150,6 +152,8 @@ export interface ViewerActions {
   setSunPosition: (pos: [number, number, number]) => void
   setSunIntensity: (v: number) => void
   setAmbientIntensity: (v: number) => void
+  setViewLayout: (layout: 'single' | 'quad') => void
+  setMaximizedView: (view: 'top' | 'front' | 'left' | 'perspective' | null) => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
     matrixWorld: THREE.Matrix4
@@ -228,6 +232,8 @@ const initialState: ViewerState = {
   sunPosition: [10, 15, 8],
   sunIntensity: 1.5,
   ambientIntensity: 0.3,
+  viewLayout: 'single',
+  maximizedView: null,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -428,6 +434,8 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
       setSunPosition: (sunPosition) => setState(s => ({ ...s, sunPosition })),
       setSunIntensity: (sunIntensity) => setState(s => ({ ...s, sunIntensity })),
       setAmbientIntensity: (ambientIntensity) => setState(s => ({ ...s, ambientIntensity })),
+      setViewLayout: (viewLayout) => setState(s => ({ ...s, viewLayout, maximizedView: null })),
+      setMaximizedView: (maximizedView) => setState(s => ({ ...s, maximizedView })),
     }},
     [],
   )

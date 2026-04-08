@@ -22,8 +22,10 @@ const SHORTCUTS: ShortcutGroup[] = [
       { keys: 'M', desc: 'Measure tool' },
       { keys: 'F', desc: 'Detect surfaces' },
       { keys: 'L', desc: 'Lasso select' },
+      { keys: 'B', desc: 'Box select' },
       { keys: 'P', desc: 'Position model' },
       { keys: 'H', desc: 'Toggle model visibility' },
+      { keys: 'G', desc: 'Toggle quad view' },
     ],
   },
   {

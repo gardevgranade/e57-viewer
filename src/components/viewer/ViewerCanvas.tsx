@@ -31,6 +31,7 @@ import FPSMonitor, { useFPSCallback } from './FPSMonitor.js'
 import DragDropZone from './DragDropZone.js'
 import WelcomeScreen from './WelcomeScreen.js'
 import MeasureHintBar from './MeasureHintBar.js'
+import OrthoViewport, { type OrthoDirection } from './OrthoViewport.js'
 
 function SceneGrid() {
   const { bbox } = useViewer()
@@ -53,6 +54,40 @@ function SceneGrid() {
   )
 }
 
+/** Maximize / minimize button overlay for the perspective quadrant */
+function ViewportLabel({
+  label,
+  isMaximized,
+  onToggle,
+}: {
+  label: string
+  isMaximized: boolean
+  onToggle: () => void
+}) {
+  return (
+    <>
+      <div className="pointer-events-none absolute left-3 top-2 z-30 select-none text-[10px] font-semibold uppercase tracking-wider text-white/40">
+        {label}
+      </div>
+      <button
+        onClick={onToggle}
+        className="absolute right-2 top-1.5 z-30 flex h-6 w-6 items-center justify-center rounded bg-white/[0.04] text-white/30 transition-colors hover:bg-white/[0.10] hover:text-white/70"
+        title={isMaximized ? 'Back to grid' : 'Maximize'}
+      >
+        {isMaximized ? (
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-3 w-3">
+            <path d="M6 2v4H2M10 14v-4h4M2 10h4v4M14 6h-4V2" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-3 w-3">
+            <path d="M2 6V2h4M14 10v4h-4M2 10v4h4M10 2h4v4" />
+          </svg>
+        )}
+      </button>
+    </>
+  )
+}
+
 export default function ViewerCanvas() {
   const {
     streamStatus, fileType, surfaces, surfaceGroups,
@@ -63,6 +98,8 @@ export default function ViewerCanvas() {
     meshVisible, setMeshVisible,
     boxSelectMode, setBoxSelectMode,
     lightSimulation,
+    viewLayout, setViewLayout,
+    maximizedView, setMaximizedView,
   } = useViewer()
   const { unitSystem } = useUnits()
   const { addToast } = useToast()
@@ -73,6 +110,13 @@ export default function ViewerCanvas() {
   const fpsCallback = useFPSCallback()
 
   const [showShortcuts, setShowShortcuts] = useState(false)
+
+  // Layout helpers
+  const isQuad = viewLayout === 'quad'
+  const isQuadGrid = isQuad && !maximizedView
+  const orthoMaximized = isQuad && maximizedView && maximizedView !== 'perspective'
+    ? (maximizedView as OrthoDirection)
+    : null
 
   // Screenshot handler
   const handleScreenshot = useCallback(() => {
@@ -97,6 +141,8 @@ export default function ViewerCanvas() {
       if (e.key === '?') { setShowShortcuts((v) => !v); return }
       if (e.key === 'Escape') {
         if (showShortcuts) { setShowShortcuts(false); return }
+        // In quad mode, Escape with a maximized view minimizes it first
+        if (maximizedView) { setMaximizedView(null); return }
         setMeasureActive(false)
         setPickSurfaceMode(false)
         setLassoMode(false)
@@ -106,6 +152,12 @@ export default function ViewerCanvas() {
       }
 
       if (!isDone) return
+
+      // Quad view toggle
+      if (e.key === 'g' || e.key === 'G') {
+        setViewLayout(viewLayout === 'single' ? 'quad' : 'single')
+        return
+      }
 
       // Tool shortcuts
       if (e.key === 'v' || e.key === 'V') {
@@ -136,7 +188,15 @@ export default function ViewerCanvas() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [isDone, isMesh, measureActive, pickSurfaceMode, lassoMode, positioningMode, meshVisible, surfaces.length, showShortcuts,
-    setMeasureActive, setPickSurfaceMode, setLassoMode, setPositioningMode, setMeshVisible, handleScreenshot])
+    setMeasureActive, setPickSurfaceMode, setLassoMode, setPositioningMode, setMeshVisible, handleScreenshot,
+    viewLayout, setViewLayout, maximizedView, setMaximizedView])
+
+  // Perspective container positioning
+  const perspClasses = isQuadGrid
+    ? 'absolute right-0 bottom-0 w-1/2 h-1/2'
+    : orthoMaximized
+      ? 'absolute right-0 bottom-0 w-px h-px overflow-hidden opacity-0'
+      : 'absolute inset-0'
 
   return (
     <div className="flex h-full flex-col">
@@ -149,63 +209,101 @@ export default function ViewerCanvas() {
           onShowShortcuts={() => setShowShortcuts(true)}
         />
 
-        {/* Viewport */}
+        {/* Viewport area */}
         <div className="relative min-w-0 flex-1 overflow-hidden bg-[#0d1117]">
           {!isActive && <WelcomeScreen />}
 
-          <Canvas
-            camera={{ position: [8, 6, 12], fov: 55, near: 0.001, far: 100_000 }}
-            gl={{ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
-            shadows={lightSimulation}
-            style={{ background: '#0d1117' }}
-          >
-            {/* Default flat lighting (off when light simulation is active) */}
-            {!lightSimulation && <ambientLight intensity={0.4} />}
-            {!lightSimulation && <directionalLight position={[10, 10, 5]} intensity={0.8} />}
+          {/* ── Ortho viewports (quad grid mode) ── */}
+          {isQuadGrid && (
+            <>
+              <div className="absolute left-0 top-0 h-1/2 w-1/2" style={{ borderRight: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <OrthoViewport direction="top" onMaximize={() => setMaximizedView('top')} />
+              </div>
+              <div className="absolute right-0 top-0 h-1/2 w-1/2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <OrthoViewport direction="front" onMaximize={() => setMaximizedView('front')} />
+              </div>
+              <div className="absolute bottom-0 left-0 h-1/2 w-1/2" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+                <OrthoViewport direction="left" onMaximize={() => setMaximizedView('left')} />
+              </div>
+            </>
+          )}
 
-            {/* Realistic light simulation with shadows */}
-            {lightSimulation && <LightSimulation />}
-
-            <Suspense fallback={null}>
-              {isMesh ? (
-                <MeshModel flyCameraRef={flyCameraRef} />
-              ) : (
-                <>
-                  <PointCloud flyCameraRef={flyCameraRef} />
-                  <MeshOverlay />
-                </>
-              )}
-              <SceneGrid />
-              <SurfaceMeshOverlay />
-              <MeasureTool flyCameraRef={flyCameraRef} />
-              <SurfacePicker flyCameraRef={flyCameraRef} />
-              <PositioningGizmo />
-              <LassoTool />
-              <BoxSelectTool flyCameraRef={flyCameraRef} />
-              <CameraViewBridge flyCameraRef={flyCameraRef} />
-              <FPSMonitor onFPS={fpsCallback} />
-            </Suspense>
-
-            <FlyCamera ref={flyCameraRef} />
-
-            <GizmoHelper alignment="top-right" margin={[60, 60]}>
-              <GizmoViewport
-                axisColors={['#e05b4b', '#4fb8b2', '#6da8f5']}
-                labelColor="white"
+          {/* ── Maximized ortho view (fills entire viewport) ── */}
+          {orthoMaximized && (
+            <div className="absolute inset-0 z-20">
+              <OrthoViewport
+                direction={orthoMaximized}
+                isMaximized
+                onMinimize={() => setMaximizedView(null)}
               />
-            </GizmoHelper>
-          </Canvas>
+            </div>
+          )}
 
-          {/* Minimal viewport overlays */}
-          <SurfacePanel />
-          <SurfaceTooltip />
-          <LassoOverlay />
-          <ModelContextCard />
-          <MeasureHintBar />
+          {/* ── Perspective view (always in DOM, resized via CSS) ── */}
+          <div className={perspClasses}>
+            {/* Quad-mode label + maximize/minimize button */}
+            {isQuad && !orthoMaximized && (
+              <ViewportLabel
+                label="PERSPECTIVE"
+                isMaximized={maximizedView === 'perspective'}
+                onToggle={() => setMaximizedView(maximizedView === 'perspective' ? null : 'perspective')}
+              />
+            )}
 
-          {/* File upload (bottom-center) */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30">
-            <DragDropZone />
+            <Canvas
+              camera={{ position: [8, 6, 12], fov: 55, near: 0.001, far: 100_000 }}
+              gl={{ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
+              shadows={lightSimulation}
+              style={{ background: '#0d1117' }}
+            >
+              {/* Default flat lighting (off when light simulation is active) */}
+              {!lightSimulation && <ambientLight intensity={0.4} />}
+              {!lightSimulation && <directionalLight position={[10, 10, 5]} intensity={0.8} />}
+
+              {/* Realistic light simulation with shadows */}
+              {lightSimulation && <LightSimulation />}
+
+              <Suspense fallback={null}>
+                {isMesh ? (
+                  <MeshModel flyCameraRef={flyCameraRef} />
+                ) : (
+                  <>
+                    <PointCloud flyCameraRef={flyCameraRef} />
+                    <MeshOverlay />
+                  </>
+                )}
+                <SceneGrid />
+                <SurfaceMeshOverlay />
+                <MeasureTool flyCameraRef={flyCameraRef} />
+                <SurfacePicker flyCameraRef={flyCameraRef} />
+                <PositioningGizmo />
+                <LassoTool />
+                <BoxSelectTool flyCameraRef={flyCameraRef} />
+                <CameraViewBridge flyCameraRef={flyCameraRef} />
+                <FPSMonitor onFPS={fpsCallback} />
+              </Suspense>
+
+              <FlyCamera ref={flyCameraRef} />
+
+              <GizmoHelper alignment="top-right" margin={[60, 60]}>
+                <GizmoViewport
+                  axisColors={['#e05b4b', '#4fb8b2', '#6da8f5']}
+                  labelColor="white"
+                />
+              </GizmoHelper>
+            </Canvas>
+
+            {/* Viewport overlays */}
+            <SurfacePanel />
+            <SurfaceTooltip />
+            <LassoOverlay />
+            <ModelContextCard />
+            <MeasureHintBar />
+
+            {/* File upload (bottom-center) */}
+            <div className="absolute bottom-3 left-1/2 z-30 -translate-x-1/2">
+              <DragDropZone />
+            </div>
           </div>
         </div>
 

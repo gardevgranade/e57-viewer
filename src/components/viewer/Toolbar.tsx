@@ -16,11 +16,13 @@ export default function Toolbar({ onShowShortcuts }: ToolbarProps) {
     meshVisible,
     surfaces,
     boxSelectMode, setBoxSelectMode,
+    viewLayout, setViewLayout,
   } = useViewer()
 
   const isDone = streamStatus === 'done'
   const isMesh = fileType && fileType !== 'e57'
   const hasSurfaces = surfaces.length > 0
+  const isQuad = viewLayout === 'quad'
 
   return (
     <div className="flex h-full w-11 flex-col items-center gap-0.5 border-r border-white/[0.06] bg-[#0c1017] py-2">
@@ -78,6 +80,15 @@ export default function Toolbar({ onShowShortcuts }: ToolbarProps) {
               />
             </>
           )}
+
+          <div className="my-1 h-px w-5 bg-white/[0.06]" />
+
+          <ToolBtn
+            icon={<QuadViewIcon />}
+            label="Quad View (G)"
+            active={isQuad}
+            onClick={() => setViewLayout(isQuad ? 'single' : 'quad')}
+          />
         </>
       )}
 
@@ -187,6 +198,17 @@ function BoxSelectIcon() {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" className="h-full w-full">
       <rect x="3" y="3" width="10" height="10" strokeDasharray="2 1.5" />
       <path d="M3 3l3-1M13 3l-3-1M3 13l3 1M13 13l-3 1" />
+    </svg>
+  )
+}
+
+function QuadViewIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" className="h-full w-full">
+      <rect x="2" y="2" width="5" height="5" rx="0.5" />
+      <rect x="9" y="2" width="5" height="5" rx="0.5" />
+      <rect x="2" y="9" width="5" height="5" rx="0.5" />
+      <rect x="9" y="9" width="5" height="5" rx="0.5" />
     </svg>
   )
 }

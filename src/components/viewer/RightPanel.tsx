@@ -61,6 +61,8 @@ export default function RightPanel({ onScreenshot, onExportCSV }: RightPanelProp
     surfaces,
     // Measure
     measureSnap, setMeasureSnap,
+    // View layout
+    viewLayout, setViewLayout,
   } = useViewer()
   const { unitSystem, setUnitSystem } = useUnits()
 
@@ -289,6 +291,18 @@ export default function RightPanel({ onScreenshot, onExportCSV }: RightPanelProp
                 {v.label}
               </button>
             ))}
+          </div>
+          <div className="mt-2">
+            <button
+              onClick={() => setViewLayout(viewLayout === 'single' ? 'quad' : 'single')}
+              className={`w-full rounded py-1.5 text-[10px] font-medium transition ${
+                viewLayout === 'quad'
+                  ? 'bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/40'
+                  : 'bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white/80'
+              }`}
+            >
+              {viewLayout === 'quad' ? '⊞ Quad View Active' : '⊞ Quad View (G)'}
+            </button>
           </div>
         </Section>
 
