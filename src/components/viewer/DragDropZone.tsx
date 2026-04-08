@@ -130,7 +130,9 @@ export default function DragDropZone() {
       const form = new FormData()
       for (const f of Array.from(files)) {
         form.append('textures', f)
-        form.append('texturePaths', f.name)
+        // Preserve webkitRelativePath from folder picker, fall back to bare name
+        const relPath = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name
+        form.append('texturePaths', relPath)
       }
       const res = await fetch(`/api/model/${jobId}`, { method: 'POST', body: form })
       const json = await res.json()
@@ -189,13 +191,14 @@ export default function DragDropZone() {
             onClick={(e) => { e.stopPropagation(); textureInputRef.current?.click() }}
             className="flex items-center gap-1 rounded bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300 hover:bg-violet-500/30 transition"
           >
-            {hasTextures ? '+ More Textures' : '+ Textures'}
+            {hasTextures ? '+ More Textures' : '+ Texture Folder'}
           </button>
         )}
         {/* Hidden inputs */}
         <input ref={inputRef} type="file" accept={ACCEPT_ATTR} multiple className="hidden" onChange={onInputChange} />
         <input ref={mtlInputRef} type="file" accept=".mtl" className="hidden" onChange={onMtlChange} />
-        <input ref={textureInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onTextureChange} />
+        {/* @ts-expect-error webkitdirectory is non-standard but widely supported */}
+        <input ref={textureInputRef} type="file" webkitdirectory="" directory="" className="hidden" onChange={onTextureChange} />
       </div>
     )
   }

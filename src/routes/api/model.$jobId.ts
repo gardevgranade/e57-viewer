@@ -1,8 +1,8 @@
 import '@tanstack/react-start'
 import { createFileRoute } from '@tanstack/react-router'
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { resolve, normalize, dirname } from 'node:path'
+import { resolve, normalize, dirname, basename } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { getJob, updateJob } from '../../lib/jobStore.js'
@@ -16,6 +16,22 @@ const CONTENT_TYPES: Record<string, string> = {
   skp: 'model/gltf-binary',
   dxf: 'text/plain',
   dwg: 'text/plain',
+}
+
+/** Recursively search a directory for a file by lowercase name. */
+async function findFileByName(dir: string, targetLower: string): Promise<string | null> {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const full = resolve(dir, entry.name)
+      if (entry.isFile() && entry.name.toLowerCase() === targetLower) return full
+      if (entry.isDirectory()) {
+        const found = await findFileByName(full, targetLower)
+        if (found) return found
+      }
+    }
+  } catch { /* ignore read errors */ }
+  return null
 }
 
 export const Route = createFileRoute('/api/model/$jobId')({
@@ -67,16 +83,32 @@ export const Route = createFileRoute('/api/model/$jobId')({
             })
           }
           const safe = normalize(textureName).replace(/\.\./g, '').replace(/^\/+/, '')
-          const texPath = resolve(job.textureDir, safe)
+          let texPath = resolve(job.textureDir, safe)
+
           // Security: ensure resolved path is inside textureDir
-          if (!texPath.startsWith(resolve(job.textureDir)) || !existsSync(texPath)) {
+          if (!texPath.startsWith(resolve(job.textureDir))) {
             return new Response(JSON.stringify({ error: 'Texture not found' }), {
               status: 404,
               headers: { 'content-type': 'application/json' },
             })
           }
+
+          // Fallback: if exact path doesn't exist, search by filename
+          if (!existsSync(texPath)) {
+            const target = basename(safe).toLowerCase()
+            const found = await findFileByName(job.textureDir, target)
+            if (found) {
+              texPath = found
+            } else {
+              return new Response(JSON.stringify({ error: 'Texture not found' }), {
+                status: 404,
+                headers: { 'content-type': 'application/json' },
+              })
+            }
+          }
+
           const data = await readFile(texPath)
-          const ext = safe.split('.').pop()?.toLowerCase() ?? ''
+          const ext = texPath.split('.').pop()?.toLowerCase() ?? ''
           const MIME: Record<string, string> = {
             jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
             gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp',
