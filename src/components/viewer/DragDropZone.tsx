@@ -117,11 +117,12 @@ export default function DragDropZone() {
     try {
       const form = new FormData()
       form.append('mtl', file)
-      const res = await fetch(`/api/model/${jobId}`, { method: 'POST', body: form })
+      const res = await fetch(`/api/companion/${jobId}`, { method: 'POST', body: form })
       const json = await res.json()
       console.log(`[DragDrop] MTL upload response:`, json)
       if (res.ok && json.addedMtl) {
         setHasMtl(true)
+        console.log(`[DragDrop] MTL added successfully`)
         // Extract texture info from MTL parsing result
         const texPaths: string[] = json.requiredTextures ?? []
         if (texPaths.length > 0) {
@@ -170,13 +171,16 @@ export default function DragDropZone() {
         console.log(`[DragDrop] Texture: "${f.name}" → "${relativePath}"`)
       }
 
-      const res = await fetch(`/api/model/${jobId}`, { method: 'POST', body: form })
+      const res = await fetch(`/api/companion/${jobId}`, { method: 'POST', body: form })
       const json = await res.json()
       console.log(`[DragDrop] Texture upload response:`, json)
       if (res.ok && json.addedTextures) {
         setHasTextures(true)
         setRequiredTextures([])
+        console.log(`[DragDrop] Textures added, incrementing model version`)
         incrementModelVersion()
+      } else {
+        console.warn(`[DragDrop] Texture upload issue: ok=${res.ok} addedTextures=${json.addedTextures}`, json)
       }
     } catch (err) {
       console.error('[DragDrop] Texture upload error:', err)
