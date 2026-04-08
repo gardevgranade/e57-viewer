@@ -145,13 +145,12 @@ export default function DragDropZone() {
 
   /** Upload texture folder to existing job — maps files to MTL-expected paths */
   const onTextureChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
+    const fileArr = Array.from(e.target.files ?? [])
     e.target.value = ''
-    if (!files || files.length === 0 || !jobId) return
+    if (fileArr.length === 0 || !jobId) return
     setIsAddingCompanion(true)
     try {
       const form = new FormData()
-      const fileArr = Array.from(files)
       console.log(`[DragDrop] Uploading ${fileArr.length} texture files`)
 
       for (const f of fileArr) {
