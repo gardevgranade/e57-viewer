@@ -74,6 +74,13 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
             if (mtlRes.ok) {
               const mtlText = await mtlRes.text()
               const mtlLoader = new MTLLoader()
+              // Custom URL modifier so textures resolve to our API endpoint
+              const manager = new THREE.LoadingManager()
+              manager.setURLModifier((texUrl) => {
+                const name = texUrl.replace(/^(\.\/|\/)+/, '')
+                return `/api/model/${jobId}?texture=${encodeURIComponent(name)}`
+              })
+              mtlLoader.manager = manager
               materials = mtlLoader.parse(mtlText, '')
               materials.preload()
             }

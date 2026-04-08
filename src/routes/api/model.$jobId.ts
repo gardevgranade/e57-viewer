@@ -2,6 +2,7 @@ import '@tanstack/react-start'
 import { createFileRoute } from '@tanstack/react-router'
 import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { resolve, normalize } from 'node:path'
 import { getJob } from '../../lib/jobStore.js'
 import { convertSkpToGlb } from '../../lib/skpConvert.js'
 import { convertDwgToDxf } from '../../lib/dwgConvert.js'
@@ -48,6 +49,42 @@ export const Route = createFileRoute('/api/model/$jobId')({
             status: 200,
             headers: {
               'content-type': 'text/plain',
+              'content-length': String(data.byteLength),
+              'cache-control': 'private, max-age=300',
+            },
+          })
+        }
+
+        // Serve texture files when ?texture=<relativePath>
+        const textureName = url.searchParams.get('texture')
+        if (textureName) {
+          if (!job.textureDir) {
+            return new Response(JSON.stringify({ error: 'No textures for this job' }), {
+              status: 404,
+              headers: { 'content-type': 'application/json' },
+            })
+          }
+          const safe = normalize(textureName).replace(/\.\./g, '').replace(/^\/+/, '')
+          const texPath = resolve(job.textureDir, safe)
+          // Security: ensure resolved path is inside textureDir
+          if (!texPath.startsWith(resolve(job.textureDir)) || !existsSync(texPath)) {
+            return new Response(JSON.stringify({ error: 'Texture not found' }), {
+              status: 404,
+              headers: { 'content-type': 'application/json' },
+            })
+          }
+          const data = await readFile(texPath)
+          const ext = safe.split('.').pop()?.toLowerCase() ?? ''
+          const MIME: Record<string, string> = {
+            jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+            gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp',
+            tga: 'application/octet-stream', tif: 'image/tiff', tiff: 'image/tiff',
+            exr: 'application/octet-stream', hdr: 'application/octet-stream',
+          }
+          return new Response(data.buffer as ArrayBuffer, {
+            status: 200,
+            headers: {
+              'content-type': MIME[ext] ?? 'application/octet-stream',
               'content-length': String(data.byteLength),
               'cache-control': 'private, max-age=300',
             },

@@ -1,8 +1,8 @@
 import '@tanstack/react-start'
 import { createFileRoute } from '@tanstack/react-router'
-import { writeFile } from 'node:fs/promises'
+import { writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { createJob } from '../../lib/jobStore.js'
 import type { FileType } from '../../lib/jobStore.js'
@@ -61,10 +61,29 @@ export const Route = createFileRoute('/api/upload')({
           await writeFile(mtlPath, Buffer.from(mtlBytes))
         }
 
-        const job = createJob(filePath, fileType, mtlPath)
+        // Accept texture files (images referenced by MTL)
+        let textureDir: string | undefined
+        const textures = formData.getAll('textures')
+        const texturePaths = formData.getAll('texturePaths')
+        if (textures.length > 0) {
+          textureDir = join(tmpdir(), `textures-${randomUUID()}`)
+          await mkdir(textureDir, { recursive: true })
+          for (let i = 0; i < textures.length; i++) {
+            const tex = textures[i]
+            if (!(tex instanceof File)) continue
+            const relPath = (texturePaths[i] as string) || tex.name
+            const safe = relPath.replace(/\.\./g, '').replace(/^\/+/, '')
+            const dest = join(textureDir, safe)
+            await mkdir(dirname(dest), { recursive: true })
+            const texBytes = await tex.arrayBuffer()
+            await writeFile(dest, Buffer.from(texBytes))
+          }
+        }
+
+        const job = createJob(filePath, fileType, mtlPath, textureDir)
 
         return new Response(
-          JSON.stringify({ jobId: job.id, fileName: file.name, size: file.size, fileType, hasMtl: !!mtlPath }),
+          JSON.stringify({ jobId: job.id, fileName: file.name, size: file.size, fileType, hasMtl: !!mtlPath, hasTextures: !!textureDir }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       },
