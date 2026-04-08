@@ -190,12 +190,13 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
           const dxfText = await blob.text()
           object = parseDxfToThree(dxfText)
         } else {
-          // skp (converted to GLB) or any other GLTF
+          // GLB, GLTF, SKP (converted to GLB)
           const loader = new GLTFLoader()
           const gltf = await new Promise<{ scene: THREE.Group }>((resolve, reject) => {
             loader.load(url, (result) => resolve(result as unknown as { scene: THREE.Group }), undefined, reject)
           })
           object = gltf.scene
+          console.log(`[MeshModel] GLTF/GLB loaded: meshes=${(() => { let n = 0; object.traverse(c => { if ((c as THREE.Mesh).isMesh) n++ }); return n })()}`)
         }
 
         URL.revokeObjectURL(url)

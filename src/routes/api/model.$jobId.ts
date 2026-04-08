@@ -17,6 +17,8 @@ const CONTENT_TYPES: Record<string, string> = {
   dxf: 'text/plain',
   dwg: 'text/plain',
   ply: 'application/octet-stream',
+  glb: 'model/gltf-binary',
+  gltf: 'model/gltf+json',
 }
 
 /** Recursively search a directory for a file by lowercase name. */

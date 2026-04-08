@@ -15,6 +15,8 @@ const ACCEPTED: Record<string, FileType> = {
   dxf: 'dxf',
   dwg: 'dwg',
   ply: 'ply',
+  glb: 'glb',
+  gltf: 'gltf',
 }
 
 export const Route = createFileRoute('/api/upload')({
@@ -44,7 +46,7 @@ export const Route = createFileRoute('/api/upload')({
         const fileType = ACCEPTED[ext]
         if (!fileType) {
           return new Response(
-            JSON.stringify({ error: 'Unsupported file type. Accepted: .e57, .dae, .obj, .skp, .dxf, .dwg, .ply' }),
+            JSON.stringify({ error: 'Unsupported file type. Accepted: .e57, .dae, .obj, .skp, .dxf, .dwg, .ply, .glb, .gltf' }),
             { status: 400, headers: { 'content-type': 'application/json' } },
           )
         }
