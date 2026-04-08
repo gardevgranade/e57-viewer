@@ -26,6 +26,7 @@ export default function DragDropZone() {
   const inputRef = useRef<HTMLInputElement>(null)
   const mtlInputRef = useRef<HTMLInputElement>(null)
   const textureInputRef = useRef<HTMLInputElement>(null)
+  const textureFileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [hasMtl, setHasMtl] = useState(false)
   const [hasTextures, setHasTextures] = useState(false)
@@ -248,7 +249,15 @@ export default function DragDropZone() {
               onClick={(e) => { e.stopPropagation(); textureInputRef.current?.click() }}
               className="flex items-center gap-1 rounded bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300 hover:bg-violet-500/30 transition"
             >
-              {hasTextures ? '+ More Textures' : '+ Texture Folder'}
+              {hasTextures ? '+ More (Folder)' : '+ Texture Folder'}
+            </button>
+          )}
+          {isObjFile && hasMtl && (
+            <button
+              onClick={(e) => { e.stopPropagation(); textureFileInputRef.current?.click() }}
+              className="flex items-center gap-1 rounded bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300 hover:bg-violet-500/30 transition"
+            >
+              {hasTextures ? '+ More (File)' : '+ Texture File(s)'}
             </button>
           )}
           {/* File browser toggle */}
@@ -269,6 +278,7 @@ export default function DragDropZone() {
           <input ref={mtlInputRef} type="file" accept=".mtl" className="hidden" onChange={onMtlChange} />
           {/* @ts-expect-error webkitdirectory is non-standard but widely supported */}
           <input ref={textureInputRef} type="file" webkitdirectory="" directory="" className="hidden" onChange={onTextureChange} />
+          <input ref={textureFileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onTextureChange} />
         </div>
 
         {/* Guided texture upload prompt */}
@@ -298,6 +308,12 @@ export default function DragDropZone() {
               className="w-full rounded-md bg-violet-500/30 px-3 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-500/40 transition"
             >
               📂 Select Texture Folder
+            </button>
+            <button
+              onClick={() => textureFileInputRef.current?.click()}
+              className="mt-1 w-full rounded-md bg-violet-500/20 px-3 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-500/30 transition"
+            >
+              📄 Select File(s)
             </button>
             <button
               onClick={() => { setRequiredTextures([]); incrementModelVersion() }}
