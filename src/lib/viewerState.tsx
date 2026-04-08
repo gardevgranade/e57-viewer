@@ -79,6 +79,8 @@ export interface ViewerState {
   lassoSelectedTriangles: Array<{ surfaceId: string; triangleIndices: number[] }> | null
   savedMeasurements: SavedMeasurement[]
   boxSelectMode: boolean
+  /** Incremented to trigger model reload (e.g. after adding MTL/textures) */
+  modelVersion: number
 }
 
 export interface ViewerActions {
@@ -139,6 +141,7 @@ export interface ViewerActions {
   removeMeasurement: (id: string) => void
   updateMeasurement: (id: string, points: Array<{ x: number; y: number; z: number }>, isClosed: boolean) => void
   setBoxSelectMode: (v: boolean) => void
+  incrementModelVersion: () => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
     matrixWorld: THREE.Matrix4
@@ -212,6 +215,7 @@ const initialState: ViewerState = {
   lassoSelectedTriangles: null,
   savedMeasurements: [],
   boxSelectMode: false,
+  modelVersion: 0,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -407,6 +411,7 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
           ),
         })),
       setBoxSelectMode: (boxSelectMode) => setState(s => ({ ...s, boxSelectMode })),
+      incrementModelVersion: () => setState(s => ({ ...s, modelVersion: s.modelVersion + 1 })),
     }},
     [],
   )

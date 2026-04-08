@@ -3,73 +3,9 @@ import { useViewer } from '../../lib/viewerState.js'
 
 const ACCEPTED_EXTENSIONS = ['.e57', '.dae', '.obj', '.skp', '.dxf', '.dwg']
 const ACCEPT_ATTR = [...ACCEPTED_EXTENSIONS, '.mtl'].join(',')
-const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tga', 'tiff', 'tif', 'webp', 'exr', 'hdr'])
 
 function getExtension(name: string) {
   return name.split('.').pop()?.toLowerCase() ?? ''
-}
-
-interface FileWithPath { file: File; relativePath: string }
-interface PickedFiles { main: File; mtl?: File; textures: FileWithPath[] }
-
-/** Recursively read a dropped FileSystemEntry tree. */
-async function readEntry(
-  entry: FileSystemEntry,
-  basePath: string,
-  result: FileWithPath[],
-) {
-  if (entry.isFile) {
-    const file = await new Promise<File>((resolve, reject) => {
-      (entry as FileSystemFileEntry).file(resolve, reject)
-    })
-    result.push({ file, relativePath: basePath + entry.name })
-  } else if (entry.isDirectory) {
-    const dirReader = (entry as FileSystemDirectoryEntry).createReader()
-    let entries: FileSystemEntry[] = []
-    while (true) {
-      const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
-        dirReader.readEntries(resolve, reject)
-      })
-      if (batch.length === 0) break
-      entries = entries.concat(batch)
-    }
-    for (const e of entries) {
-      await readEntry(e, basePath + entry.name + '/', result)
-    }
-  }
-}
-
-/** Read all entries from a DataTransfer (supports folder drops). */
-async function readDroppedItems(dataTransfer: DataTransfer): Promise<FileWithPath[]> {
-  const result: FileWithPath[] = []
-  const items = dataTransfer.items
-  if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === 'function') {
-    for (let i = 0; i < items.length; i++) {
-      const entry = items[i].webkitGetAsEntry()
-      if (entry) await readEntry(entry, '', result)
-    }
-    return result
-  }
-  // Fallback: plain file list
-  for (const file of Array.from(dataTransfer.files)) {
-    result.push({ file, relativePath: file.name })
-  }
-  return result
-}
-
-/** Pick main model file + optional MTL + texture images from a list of files. */
-function pickFiles(files: FileWithPath[]): PickedFiles | null {
-  const main = files.find(f => ACCEPTED_EXTENSIONS.includes(`.${getExtension(f.file.name)}`))
-  if (!main) return null
-  const mtl = files.find(f => getExtension(f.file.name) === 'mtl')
-  const textures = files.filter(f => IMAGE_EXTENSIONS.has(getExtension(f.file.name)))
-  return { main: main.file, mtl: mtl?.file, textures }
-}
-
-/** Simple pick from a plain FileList (no paths). */
-function pickFilesSimple(fileList: FileList | File[]): PickedFiles | null {
-  const arr = Array.from(fileList).map(f => ({ file: f, relativePath: f.name }))
-  return pickFiles(arr)
 }
 
 export default function DragDropZone() {
@@ -77,36 +13,40 @@ export default function DragDropZone() {
     streamStatus,
     fileName,
     fileSize,
+    fileType,
+    jobId,
     setUploading,
     setJobId,
     setStreamStatus,
     setFileType,
     setError,
     reset,
+    incrementModelVersion,
   } = useViewer()
   const inputRef = useRef<HTMLInputElement>(null)
-  const folderInputRef = useRef<HTMLInputElement>(null)
+  const mtlInputRef = useRef<HTMLInputElement>(null)
+  const textureInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [hasMtl, setHasMtl] = useState(false)
+  const [hasTextures, setHasTextures] = useState(false)
+  const [isAddingCompanion, setIsAddingCompanion] = useState(false)
 
-  const handleUpload = useCallback(
-    async (picked: PickedFiles) => {
-      const ext = getExtension(picked.main.name)
+  const handleFile = useCallback(
+    async (file: File, mtlFile?: File) => {
+      const ext = getExtension(file.name)
       if (!ACCEPTED_EXTENSIONS.includes(`.${ext}`)) {
         setError(`Unsupported file type. Accepted: ${ACCEPTED_EXTENSIONS.join(', ')}`)
         return
       }
       reset()
-      setUploading(picked.main.name, picked.main.size)
+      setHasMtl(false)
+      setHasTextures(false)
+      setUploading(file.name, file.size)
 
       const form = new FormData()
-      form.append('file', picked.main)
-      if (ext === 'obj' && picked.mtl) {
-        form.append('mtl', picked.mtl)
-      }
-      // Append texture files with their relative paths
-      for (const tex of picked.textures) {
-        form.append('textures', tex.file)
-        form.append('texturePaths', tex.relativePath)
+      form.append('file', file)
+      if (ext === 'obj' && mtlFile) {
+        form.append('mtl', mtlFile)
       }
 
       try {
@@ -116,6 +56,7 @@ export default function DragDropZone() {
           setError(json.error ?? 'Upload failed')
           return
         }
+        if (json.hasMtl) setHasMtl(true)
         setFileType(json.fileType ?? ext)
         setJobId(json.jobId)
         setStreamStatus('streaming')
@@ -126,15 +67,23 @@ export default function DragDropZone() {
     [reset, setUploading, setJobId, setStreamStatus, setFileType, setError],
   )
 
+  /** Pick main model file + optional companion MTL from a FileList. */
+  function pickFiles(files: FileList | File[]): { main: File; mtl?: File } | null {
+    const arr = Array.from(files)
+    const main = arr.find((f) => ACCEPTED_EXTENSIONS.includes(`.${getExtension(f.name)}`))
+    if (!main) return null
+    const mtl = arr.find((f) => getExtension(f.name) === 'mtl')
+    return { main, mtl }
+  }
+
   const onDrop = useCallback(
-    async (e: React.DragEvent) => {
+    (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragging(false)
-      const items = await readDroppedItems(e.dataTransfer)
-      const picked = pickFiles(items)
-      if (picked) handleUpload(picked)
+      const picked = pickFiles(e.dataTransfer.files)
+      if (picked) handleFile(picked.main, picked.mtl)
     },
-    [handleUpload],
+    [handleFile],
   )
 
   const onDragOver = (e: React.DragEvent) => {
@@ -146,33 +95,66 @@ export default function DragDropZone() {
 
   const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const picked = pickFilesSimple(e.target.files)
-      if (picked) handleUpload(picked)
+      const picked = pickFiles(e.target.files)
+      if (picked) handleFile(picked.main, picked.mtl)
     }
     e.target.value = ''
   }
 
-  const onFolderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const arr: FileWithPath[] = Array.from(e.target.files).map(f => ({
-        file: f,
-        relativePath: (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name,
-      }))
-      const picked = pickFiles(arr)
-      if (picked) handleUpload(picked)
-    }
+  /** Upload companion MTL file to existing job */
+  const onMtlChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
     e.target.value = ''
-  }
+    if (!file || !jobId) return
+    setIsAddingCompanion(true)
+    try {
+      const form = new FormData()
+      form.append('mtl', file)
+      const res = await fetch(`/api/model/${jobId}`, { method: 'POST', body: form })
+      const json = await res.json()
+      if (res.ok && json.addedMtl) {
+        setHasMtl(true)
+        incrementModelVersion()
+      }
+    } catch { /* ignore */ }
+    setIsAddingCompanion(false)
+  }, [jobId, incrementModelVersion])
+
+  /** Upload texture images to existing job */
+  const onTextureChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    e.target.value = ''
+    if (!files || files.length === 0 || !jobId) return
+    setIsAddingCompanion(true)
+    try {
+      const form = new FormData()
+      for (const f of Array.from(files)) {
+        form.append('textures', f)
+        form.append('texturePaths', f.name)
+      }
+      const res = await fetch(`/api/model/${jobId}`, { method: 'POST', body: form })
+      const json = await res.json()
+      if (res.ok && json.addedTextures) {
+        setHasTextures(true)
+        incrementModelVersion()
+      }
+    } catch { /* ignore */ }
+    setIsAddingCompanion(false)
+  }, [jobId, incrementModelVersion])
 
   const isUploading = streamStatus === 'uploading'
   const isActive = streamStatus === 'streaming' || streamStatus === 'done'
 
-  if (isUploading) {
+  const isObjFile = fileType === 'obj'
+
+  if (isUploading || isAddingCompanion) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs backdrop-blur-sm">
         <SpinnerIcon className="h-3 w-3 shrink-0 animate-spin text-teal-400" />
-        <span className="truncate max-w-[160px] text-white/70">{fileName}</span>
-        <span className="text-white/30">{formatBytes(fileSize ?? 0)}</span>
+        <span className="truncate max-w-[160px] text-white/70">
+          {isAddingCompanion ? 'Adding companion file…' : fileName}
+        </span>
+        {!isAddingCompanion && <span className="text-white/30">{formatBytes(fileSize ?? 0)}</span>}
       </div>
     )
   }
@@ -188,16 +170,32 @@ export default function DragDropZone() {
         >
           <CloudUploadIcon className="h-3 w-3" /> Open File
         </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); folderInputRef.current?.click() }}
-          className="flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-300 hover:bg-amber-500/30 transition"
-          title="Open folder with OBJ + MTL + textures"
-        >
-          <FolderIcon className="h-3 w-3" /> Open Folder
-        </button>
+        {/* Companion file buttons for OBJ */}
+        {isObjFile && !hasMtl && (
+          <button
+            onClick={(e) => { e.stopPropagation(); mtlInputRef.current?.click() }}
+            className="flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-300 hover:bg-amber-500/30 transition"
+          >
+            + MTL
+          </button>
+        )}
+        {isObjFile && hasMtl && (
+          <span className="flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+            ✓ MTL
+          </span>
+        )}
+        {isObjFile && (
+          <button
+            onClick={(e) => { e.stopPropagation(); textureInputRef.current?.click() }}
+            className="flex items-center gap-1 rounded bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300 hover:bg-violet-500/30 transition"
+          >
+            {hasTextures ? '+ More Textures' : '+ Textures'}
+          </button>
+        )}
+        {/* Hidden inputs */}
         <input ref={inputRef} type="file" accept={ACCEPT_ATTR} multiple className="hidden" onChange={onInputChange} />
-        {/* @ts-expect-error webkitdirectory is a non-standard but widely supported attribute */}
-        <input ref={folderInputRef} type="file" webkitdirectory="" directory="" className="hidden" onChange={onFolderChange} />
+        <input ref={mtlInputRef} type="file" accept=".mtl" className="hidden" onChange={onMtlChange} />
+        <input ref={textureInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onTextureChange} />
       </div>
     )
   }
@@ -207,6 +205,7 @@ export default function DragDropZone() {
       onDrop={onDrop}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
+      onClick={() => inputRef.current?.click()}
       className={[
         'flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center transition-all select-none',
         isDragging
@@ -215,31 +214,15 @@ export default function DragDropZone() {
       ].join(' ')}
     >
       <input ref={inputRef} type="file" accept={ACCEPT_ATTR} multiple className="hidden" onChange={onInputChange} />
-      {/* @ts-expect-error webkitdirectory is a non-standard but widely supported attribute */}
-      <input ref={folderInputRef} type="file" webkitdirectory="" directory="" className="hidden" onChange={onFolderChange} />
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10">
         <CloudUploadIcon className="h-7 w-7 text-teal-400" />
       </div>
       <div>
         <p className="text-base font-semibold text-white">
-          {isDragging ? 'Drop your 3D file or folder' : 'Drop a 3D file or folder here'}
+          {isDragging ? 'Drop your 3D file' : 'Drop a 3D file here'}
         </p>
-        <div className="mt-2 flex items-center justify-center gap-2">
-          <button
-            onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
-            className="rounded-lg bg-teal-500/20 px-3 py-1.5 text-xs font-medium text-teal-300 hover:bg-teal-500/30 transition"
-          >
-            Browse Files
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); folderInputRef.current?.click() }}
-            className="rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-500/30 transition"
-            title="Open folder with OBJ + MTL + textures"
-          >
-            Open Folder
-          </button>
-        </div>
-        <p className="mt-2 text-xs text-white/30">E57 · DAE · OBJ (+MTL + textures) · SKP · DXF · DWG</p>
+        <p className="mt-1 text-sm text-white/50">or click to browse</p>
+        <p className="mt-1 text-xs text-white/30">E57 · DAE · OBJ (+MTL) · SKP · DXF · DWG</p>
       </div>
     </div>
   )
@@ -259,14 +242,6 @@ function CloudUploadIcon({ className }: { className?: string }) {
         strokeLinejoin="round"
         d="M12 16.5v-9m-3 3l3-3 3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338-2.32 5.75 5.75 0 011.043 11.095"
       />
-    </svg>
-  )
-}
-
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
     </svg>
   )
 }

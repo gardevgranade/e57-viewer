@@ -1,9 +1,11 @@
 import '@tanstack/react-start'
 import { createFileRoute } from '@tanstack/react-router'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { resolve, normalize } from 'node:path'
-import { getJob } from '../../lib/jobStore.js'
+import { resolve, normalize, dirname } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { tmpdir } from 'node:os'
+import { getJob, updateJob } from '../../lib/jobStore.js'
 import { convertSkpToGlb } from '../../lib/skpConvert.js'
 import { convertDwgToDxf } from '../../lib/dwgConvert.js'
 
@@ -136,6 +138,61 @@ export const Route = createFileRoute('/api/model/$jobId')({
             headers: { 'content-type': 'application/json' },
           })
         }
+      },
+
+      // POST: add companion files (MTL, textures) to an existing job
+      POST: async ({ params, request }) => {
+        const job = getJob(params.jobId)
+        if (!job) {
+          return new Response(JSON.stringify({ error: 'Job not found' }), {
+            status: 404, headers: { 'content-type': 'application/json' },
+          })
+        }
+
+        let formData: FormData
+        try { formData = await request.formData() } catch {
+          return new Response(JSON.stringify({ error: 'Failed to parse form data' }), {
+            status: 400, headers: { 'content-type': 'application/json' },
+          })
+        }
+
+        let addedMtl = false
+        let addedTextures = false
+
+        // Add MTL file
+        const mtlFile = formData.get('mtl')
+        if (mtlFile instanceof File) {
+          const mtlBytes = await mtlFile.arrayBuffer()
+          const mtlPath = resolve(tmpdir(), `model-upload-${randomUUID()}.mtl`)
+          await writeFile(mtlPath, Buffer.from(mtlBytes))
+          updateJob(job.id, { mtlPath })
+          addedMtl = true
+        }
+
+        // Add texture files
+        const textures = formData.getAll('textures')
+        const texturePaths = formData.getAll('texturePaths')
+        if (textures.length > 0) {
+          const textureDir = job.textureDir || resolve(tmpdir(), `textures-${randomUUID()}`)
+          await mkdir(textureDir, { recursive: true })
+          for (let i = 0; i < textures.length; i++) {
+            const tex = textures[i]
+            if (!(tex instanceof File)) continue
+            const relPath = (texturePaths[i] as string) || tex.name
+            const safe = relPath.replace(/\.\./g, '').replace(/^\/+/, '')
+            const dest = resolve(textureDir, safe)
+            await mkdir(dirname(dest), { recursive: true })
+            const texBytes = await tex.arrayBuffer()
+            await writeFile(dest, Buffer.from(texBytes))
+          }
+          if (!job.textureDir) updateJob(job.id, { textureDir })
+          addedTextures = true
+        }
+
+        return new Response(
+          JSON.stringify({ ok: true, addedMtl, addedTextures }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
       },
     },
   },

@@ -34,7 +34,7 @@ function applyDefaultMaterial(object: THREE.Object3D) {
 }
 
 export default function MeshModel({ flyCameraRef }: MeshModelProps) {
-  const { jobId, fileType, streamStatus, setDone, setError, meshObjectRef, meshVisible } = useViewer()
+  const { jobId, fileType, streamStatus, setDone, setError, meshObjectRef, meshVisible, modelVersion } = useViewer()
   const { camera } = useThree()
   const groupRef = useRef<THREE.Group>(null!)
   const sceneRef = useRef<THREE.Group | null>(null)
@@ -42,8 +42,14 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
   // Ground-snap group position — set after loading
   const positionRef = useRef<[number, number, number]>([0, 0, 0])
 
+  const lastLoadedVersionRef = useRef(-1)
+
   useEffect(() => {
-    if (!jobId || streamStatus !== 'streaming' || fileType === 'e57' || !fileType) return
+    // Load on initial streaming, or reload when modelVersion increments
+    const isInitialLoad = streamStatus === 'streaming'
+    const isReload = modelVersion > lastLoadedVersionRef.current && streamStatus === 'done'
+    if (!jobId || fileType === 'e57' || !fileType || (!isInitialLoad && !isReload)) return
+    lastLoadedVersionRef.current = modelVersion
 
     let cancelled = false
 
@@ -171,7 +177,7 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
 
     load()
     return () => { cancelled = true }
-  }, [jobId, fileType, streamStatus, camera, setDone, setError, flyCameraRef])
+  }, [jobId, fileType, streamStatus, camera, setDone, setError, flyCameraRef, modelVersion])
 
   // Apply objectQuaternion on top of the base rotation
   const { objectQuaternion, objectYOffset } = useViewer()
