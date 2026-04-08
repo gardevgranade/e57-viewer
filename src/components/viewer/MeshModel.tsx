@@ -87,7 +87,7 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
           // Try to fetch companion MTL
           let materials: ReturnType<MTLLoader['parse']> | undefined
           try {
-            const mtlRes = await fetch(`/api/model/${jobId}?mtl=1`)
+            const mtlRes = await fetch(`/api/model/${jobId}?mtl=1&_t=${Date.now()}`)
             if (mtlRes.ok) {
               const mtlText = await mtlRes.text()
               console.log('[MeshModel] MTL loaded, length:', mtlText.length)
@@ -97,8 +97,8 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
               // Custom LoadingManager: redirect texture URLs to our API + log errors
               const manager = new THREE.LoadingManager()
               manager.setURLModifier((texUrl) => {
-                // Normalize Windows backslashes, strip leading ./ or /
-                const name = texUrl.replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '')
+                // Normalize Windows backslashes, strip leading ./ or /, collapse double slashes
+                const name = texUrl.replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '').replace(/\/+/g, '/')
                 const resolved = `/api/model/${jobId}?texture=${encodeURIComponent(name)}`
                 console.log(`[MeshModel] Texture URL: "${texUrl}" → "${resolved}"`)
                 return resolved

@@ -57,6 +57,7 @@ export const Route = createFileRoute('/api/model/$jobId')({
     handlers: {
       GET: async ({ params, request }) => {
         const job = getJob(params.jobId)
+        console.log(`[model GET] jobId=${params.jobId} found=${!!job} mtlPath=${job?.mtlPath ?? 'none'} textureDir=${job?.textureDir ?? 'none'}`)
         if (!job) {
           return new Response(JSON.stringify({ error: 'Job not found' }), {
             status: 404,
@@ -92,10 +93,11 @@ export const Route = createFileRoute('/api/model/$jobId')({
 
         // Serve the companion MTL file when ?mtl=1
         if (url.searchParams.get('mtl') === '1') {
+          console.log(`[model GET ?mtl] job.mtlPath=${job.mtlPath ?? 'undefined'} exists=${job.mtlPath ? existsSync(job.mtlPath) : false}`)
           if (!job.mtlPath) {
             return new Response(JSON.stringify({ error: 'No MTL file for this job' }), {
               status: 404,
-              headers: { 'content-type': 'application/json' },
+              headers: { 'content-type': 'application/json', 'cache-control': 'no-cache' },
             })
           }
           if (!existsSync(job.mtlPath)) {
