@@ -19,6 +19,7 @@ import SurfacePicker from './SurfacePicker.js'
 import SurfaceTooltip from './SurfaceTooltip.js'
 import LassoTool from './LassoTool.js'
 import LassoOverlay from './LassoOverlay.js'
+import BoxSelectTool from './BoxSelectTool.js'
 import PositioningGizmo from './PositioningGizmo.js'
 import ModelContextCard from './ModelContextCard.js'
 import PositioningPanel from './PositioningPanel.js'
@@ -60,6 +61,7 @@ export default function ViewerCanvas() {
     lassoMode, setLassoMode,
     positioningMode, setPositioningMode,
     meshVisible, setMeshVisible,
+    boxSelectMode, setBoxSelectMode,
   } = useViewer()
   const { unitSystem } = useUnits()
   const { addToast } = useToast()
@@ -98,6 +100,7 @@ export default function ViewerCanvas() {
         setPickSurfaceMode(false)
         setLassoMode(false)
         setPositioningMode(false)
+        setBoxSelectMode(false)
         return
       }
 
@@ -105,11 +108,12 @@ export default function ViewerCanvas() {
 
       // Tool shortcuts
       if (e.key === 'v' || e.key === 'V') {
-        setMeasureActive(false); setPickSurfaceMode(false); setLassoMode(false); return
+        setMeasureActive(false); setPickSurfaceMode(false); setLassoMode(false); setBoxSelectMode(false); return
       }
       if (e.key === 'm' || e.key === 'M') { setMeasureActive(!measureActive); return }
       if ((e.key === 'f' || e.key === 'F') && isMesh) { setPickSurfaceMode(!pickSurfaceMode); return }
       if ((e.key === 'l' || e.key === 'L') && isMesh && surfaces.length > 0) { setLassoMode(!lassoMode); return }
+      if ((e.key === 'b' || e.key === 'B') && isDone) { setBoxSelectMode(!boxSelectMode); return }
       if ((e.key === 'p' || e.key === 'P') && isMesh && meshVisible) { setPositioningMode(!positioningMode); return }
       if ((e.key === 'h' || e.key === 'H') && isMesh) { setMeshVisible(!meshVisible); return }
 
@@ -171,6 +175,7 @@ export default function ViewerCanvas() {
               <SurfacePicker flyCameraRef={flyCameraRef} />
               <PositioningGizmo />
               <LassoTool />
+              <BoxSelectTool flyCameraRef={flyCameraRef} />
               <CameraViewBridge flyCameraRef={flyCameraRef} />
               <FPSMonitor onFPS={fpsCallback} />
             </Suspense>

@@ -78,6 +78,7 @@ export interface ViewerState {
   lassoTriangleMode: boolean
   lassoSelectedTriangles: Array<{ surfaceId: string; triangleIndices: number[] }> | null
   savedMeasurements: SavedMeasurement[]
+  boxSelectMode: boolean
 }
 
 export interface ViewerActions {
@@ -137,6 +138,7 @@ export interface ViewerActions {
   addMeasurement: (m: SavedMeasurement) => void
   removeMeasurement: (id: string) => void
   updateMeasurement: (id: string, points: Array<{ x: number; y: number; z: number }>, isClosed: boolean) => void
+  setBoxSelectMode: (v: boolean) => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
     matrixWorld: THREE.Matrix4
@@ -209,6 +211,7 @@ const initialState: ViewerState = {
   lassoTriangleMode: false,
   lassoSelectedTriangles: null,
   savedMeasurements: [],
+  boxSelectMode: false,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -403,6 +406,7 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
             m.id === id ? { ...m, points, isClosed } : m,
           ),
         })),
+      setBoxSelectMode: (boxSelectMode) => setState(s => ({ ...s, boxSelectMode })),
     }},
     [],
   )

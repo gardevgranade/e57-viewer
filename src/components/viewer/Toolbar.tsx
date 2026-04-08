@@ -20,6 +20,7 @@ export default function Toolbar({ onScreenshot, onExportCSV, onShowShortcuts }: 
     meshVisible, setMeshVisible,
     showMesh, setShowMesh,
     surfaces,
+    boxSelectMode, setBoxSelectMode,
   } = useViewer()
   const { unitSystem, setUnitSystem } = useUnits()
 
@@ -35,11 +36,12 @@ export default function Toolbar({ onScreenshot, onExportCSV, onShowShortcuts }: 
       <ToolBtn
         icon={<PointerIcon />}
         label="Select (V)"
-        active={!measureActive && !pickSurfaceMode && !lassoMode && !positioningMode}
+        active={!measureActive && !pickSurfaceMode && !lassoMode && !positioningMode && !boxSelectMode}
         onClick={() => {
           setMeasureActive(false)
           setPickSurfaceMode(false)
           setLassoMode(false)
+          setBoxSelectMode(false)
         }}
       />
 
@@ -67,6 +69,13 @@ export default function Toolbar({ onScreenshot, onExportCSV, onShowShortcuts }: 
                 active={lassoMode}
                 onClick={() => setLassoMode(!lassoMode)}
                 disabled={!hasSurfaces}
+              />
+
+              <ToolBtn
+                icon={<BoxSelectIcon />}
+                label="Box Select (B)"
+                active={boxSelectMode}
+                onClick={() => setBoxSelectMode(!boxSelectMode)}
               />
 
               <ToolBtn
@@ -262,6 +271,16 @@ function DownloadIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" className="h-full w-full">
       <path d="M8 2v8M5 7l3 3 3-3M3 12h10" />
+    </svg>
+  )
+}
+
+
+function BoxSelectIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" className="h-full w-full">
+      <rect x="3" y="3" width="10" height="10" strokeDasharray="2 1.5" />
+      <path d="M3 3l3-1M13 3l-3-1M3 13l3 1M13 13l-3 1" />
     </svg>
   )
 }
