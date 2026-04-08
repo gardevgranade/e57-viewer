@@ -20,6 +20,8 @@ import SurfaceTooltip from './SurfaceTooltip.js'
 import LassoTool from './LassoTool.js'
 import LassoOverlay from './LassoOverlay.js'
 import BoxSelectTool from './BoxSelectTool.js'
+import LightSimulation from './LightSimulation.js'
+import LightPanel from './LightPanel.js'
 import PositioningGizmo from './PositioningGizmo.js'
 import ModelContextCard from './ModelContextCard.js'
 import PositioningPanel from './PositioningPanel.js'
@@ -62,6 +64,7 @@ export default function ViewerCanvas() {
     positioningMode, setPositioningMode,
     meshVisible, setMeshVisible,
     boxSelectMode, setBoxSelectMode,
+    lightSimulation,
   } = useViewer()
   const { unitSystem } = useUnits()
   const { addToast } = useToast()
@@ -155,10 +158,15 @@ export default function ViewerCanvas() {
           <Canvas
             camera={{ position: [8, 6, 12], fov: 55, near: 0.001, far: 100_000 }}
             gl={{ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
+            shadows={lightSimulation}
             style={{ background: '#0d1117' }}
           >
-            <ambientLight intensity={0.4} />
-            <directionalLight position={[10, 10, 5]} intensity={0.8} />
+            {/* Default flat lighting (off when light simulation is active) */}
+            {!lightSimulation && <ambientLight intensity={0.4} />}
+            {!lightSimulation && <directionalLight position={[10, 10, 5]} intensity={0.8} />}
+
+            {/* Realistic light simulation with shadows */}
+            {lightSimulation && <LightSimulation />}
 
             <Suspense fallback={null}>
               {isMesh ? (
@@ -197,6 +205,7 @@ export default function ViewerCanvas() {
           <LassoOverlay />
           <ModelContextCard />
           <PositioningPanel />
+          <LightPanel />
 
           {/* Camera view presets bar */}
           {isDone && <CameraViewBar onView={triggerCameraView} />}

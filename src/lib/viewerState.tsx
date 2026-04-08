@@ -81,6 +81,10 @@ export interface ViewerState {
   boxSelectMode: boolean
   /** Incremented to trigger model reload (e.g. after adding MTL/textures) */
   modelVersion: number
+  lightSimulation: boolean
+  sunPosition: [number, number, number]
+  sunIntensity: number
+  ambientIntensity: number
 }
 
 export interface ViewerActions {
@@ -142,6 +146,10 @@ export interface ViewerActions {
   updateMeasurement: (id: string, points: Array<{ x: number; y: number; z: number }>, isClosed: boolean) => void
   setBoxSelectMode: (v: boolean) => void
   incrementModelVersion: () => void
+  setLightSimulation: (v: boolean) => void
+  setSunPosition: (pos: [number, number, number]) => void
+  setSunIntensity: (v: number) => void
+  setAmbientIntensity: (v: number) => void
   pointCloudGeoRef: React.MutableRefObject<{
     geometry: THREE.BufferGeometry
     matrixWorld: THREE.Matrix4
@@ -216,6 +224,10 @@ const initialState: ViewerState = {
   savedMeasurements: [],
   boxSelectMode: false,
   modelVersion: 0,
+  lightSimulation: false,
+  sunPosition: [10, 15, 8],
+  sunIntensity: 1.5,
+  ambientIntensity: 0.3,
 }
 
 const ViewerContext = createContext<(ViewerState & ViewerActions) | null>(null)
@@ -412,6 +424,10 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
         })),
       setBoxSelectMode: (boxSelectMode) => setState(s => ({ ...s, boxSelectMode })),
       incrementModelVersion: () => setState(s => ({ ...s, modelVersion: s.modelVersion + 1 })),
+      setLightSimulation: (lightSimulation) => setState(s => ({ ...s, lightSimulation })),
+      setSunPosition: (sunPosition) => setState(s => ({ ...s, sunPosition })),
+      setSunIntensity: (sunIntensity) => setState(s => ({ ...s, sunIntensity })),
+      setAmbientIntensity: (ambientIntensity) => setState(s => ({ ...s, ambientIntensity })),
     }},
     [],
   )

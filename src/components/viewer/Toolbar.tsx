@@ -21,6 +21,7 @@ export default function Toolbar({ onScreenshot, onExportCSV, onShowShortcuts }: 
     showMesh, setShowMesh,
     surfaces,
     boxSelectMode, setBoxSelectMode,
+    lightSimulation, setLightSimulation,
   } = useViewer()
   const { unitSystem, setUnitSystem } = useUnits()
 
@@ -109,6 +110,15 @@ export default function Toolbar({ onScreenshot, onExportCSV, onShowShortcuts }: 
           label="Toggle Mesh"
           active={showMesh}
           onClick={() => setShowMesh(!showMesh)}
+        />
+      )}
+
+      {isDone && (
+        <ToolBtn
+          icon={<SunIcon />}
+          label={lightSimulation ? 'Light Sim ON' : 'Light Sim OFF'}
+          active={lightSimulation}
+          onClick={() => setLightSimulation(!lightSimulation)}
         />
       )}
 
@@ -281,6 +291,15 @@ function BoxSelectIcon() {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" className="h-full w-full">
       <rect x="3" y="3" width="10" height="10" strokeDasharray="2 1.5" />
       <path d="M3 3l3-1M13 3l-3-1M3 13l3 1M13 13l-3 1" />
+    </svg>
+  )
+}
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" className="h-full w-full">
+      <circle cx="8" cy="8" r="3" />
+      <path d="M8 2v2M8 12v2M2 8h2M12 8h2M3.75 3.75l1.5 1.5M10.75 10.75l1.5 1.5M3.75 12.25l1.5-1.5M10.75 5.25l1.5-1.5" />
     </svg>
   )
 }
