@@ -30,6 +30,9 @@ export default function DragDropZone() {
   const [hasMtl, setHasMtl] = useState(false)
   const [hasTextures, setHasTextures] = useState(false)
   const [isAddingCompanion, setIsAddingCompanion] = useState(false)
+  // Texture paths extracted from MTL
+  const [requiredTextures, setRequiredTextures] = useState<string[]>([])
+  const [textureFolder, setTextureFolder] = useState<string | null>(null)
 
   const handleFile = useCallback(
     async (file: File, mtlFile?: File) => {
@@ -41,6 +44,8 @@ export default function DragDropZone() {
       reset()
       setHasMtl(false)
       setHasTextures(false)
+      setRequiredTextures([])
+      setTextureFolder(null)
       setUploading(file.name, file.size)
 
       const form = new FormData()
@@ -116,7 +121,19 @@ export default function DragDropZone() {
       console.log(`[DragDrop] MTL upload response:`, json)
       if (res.ok && json.addedMtl) {
         setHasMtl(true)
-        incrementModelVersion()
+        // Extract texture info from MTL parsing result
+        const texPaths: string[] = json.requiredTextures ?? []
+        if (texPaths.length > 0) {
+          setRequiredTextures(texPaths)
+          // Find common folder prefix (e.g. "textures/")
+          const folders = texPaths.map(p => p.includes('/') ? p.slice(0, p.lastIndexOf('/') + 1) : '')
+          const commonFolder = folders[0] && folders.every(f => f === folders[0]) ? folders[0] : null
+          setTextureFolder(commonFolder)
+          console.log(`[DragDrop] MTL needs ${texPaths.length} textures, common folder: ${commonFolder}`)
+        } else {
+          // No textures needed — reload immediately
+          incrementModelVersion()
+        }
       }
     } catch (err) {
       console.error('[DragDrop] MTL upload error:', err)
@@ -124,7 +141,7 @@ export default function DragDropZone() {
     setIsAddingCompanion(false)
   }, [jobId, incrementModelVersion])
 
-  /** Upload texture images to existing job */
+  /** Upload texture folder to existing job — maps files to MTL-expected paths */
   const onTextureChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     e.target.value = ''
@@ -132,21 +149,39 @@ export default function DragDropZone() {
     setIsAddingCompanion(true)
     try {
       const form = new FormData()
-      for (const f of Array.from(files)) {
+      const fileArr = Array.from(files)
+      console.log(`[DragDrop] Uploading ${fileArr.length} texture files`)
+
+      for (const f of fileArr) {
+        const webkitPath = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name
+
+        // Try to match against required texture paths by filename
+        const baseName = f.name.toLowerCase()
+        const matchedPath = requiredTextures.find(rp => {
+          const rpBase = rp.split('/').pop()?.toLowerCase()
+          return rpBase === baseName
+        })
+
+        // Use the MTL-expected path if found, otherwise the webkitRelativePath
+        const relativePath = matchedPath || webkitPath
         form.append('textures', f)
-        // Preserve webkitRelativePath from folder picker, fall back to bare name
-        const relPath = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name
-        form.append('texturePaths', relPath)
+        form.append('texturePaths', relativePath)
+        console.log(`[DragDrop] Texture: "${f.name}" → "${relativePath}"`)
       }
+
       const res = await fetch(`/api/model/${jobId}`, { method: 'POST', body: form })
       const json = await res.json()
+      console.log(`[DragDrop] Texture upload response:`, json)
       if (res.ok && json.addedTextures) {
         setHasTextures(true)
+        setRequiredTextures([])
         incrementModelVersion()
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error('[DragDrop] Texture upload error:', err)
+    }
     setIsAddingCompanion(false)
-  }, [jobId, incrementModelVersion])
+  }, [jobId, incrementModelVersion, requiredTextures])
 
   const [showFiles, setShowFiles] = useState(false)
   const [jobFiles, setJobFiles] = useState<{ hasMtl: boolean; textureFiles: string[] } | null>(null)
@@ -180,6 +215,9 @@ export default function DragDropZone() {
   }
 
   if (isActive) {
+    // Show guided texture upload prompt after MTL is added
+    const needsTextures = requiredTextures.length > 0 && !hasTextures
+
     return (
       <div className="relative">
         <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs backdrop-blur-sm">
@@ -205,7 +243,7 @@ export default function DragDropZone() {
               ✓ MTL
             </span>
           )}
-          {isObjFile && (
+          {isObjFile && hasMtl && (
             <button
               onClick={(e) => { e.stopPropagation(); textureInputRef.current?.click() }}
               className="flex items-center gap-1 rounded bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300 hover:bg-violet-500/30 transition"
@@ -233,8 +271,45 @@ export default function DragDropZone() {
           <input ref={textureInputRef} type="file" webkitdirectory="" directory="" className="hidden" onChange={onTextureChange} />
         </div>
 
+        {/* Guided texture upload prompt */}
+        {needsTextures && isObjFile && (
+          <div className="absolute top-full left-0 z-50 mt-1 w-96 rounded-lg border border-amber-500/30 bg-[#1a1a2e] p-3 text-xs shadow-xl backdrop-blur-sm">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-amber-400 text-sm">⚠</span>
+              <span className="font-semibold text-amber-300">
+                MTL references {requiredTextures.length} texture{requiredTextures.length > 1 ? 's' : ''}
+              </span>
+            </div>
+            {textureFolder && (
+              <div className="mb-2 text-white/60">
+                Please select the <span className="font-mono text-amber-200 bg-white/5 px-1 rounded">{textureFolder.replace(/\/$/, '')}</span> folder:
+              </div>
+            )}
+            <div className="mb-2 max-h-32 overflow-y-auto space-y-0.5 pl-2 border-l border-white/10">
+              {requiredTextures.map((t, i) => (
+                <div key={i} className="flex items-center gap-1 text-[10px]">
+                  <span className="text-amber-400/60">•</span>
+                  <span className="text-white/50 font-mono truncate">{t}</span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => textureInputRef.current?.click()}
+              className="w-full rounded-md bg-violet-500/30 px-3 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-500/40 transition"
+            >
+              📂 Select Texture Folder
+            </button>
+            <button
+              onClick={() => { setRequiredTextures([]); incrementModelVersion() }}
+              className="mt-1 w-full rounded-md bg-white/[0.04] px-3 py-1 text-[10px] text-white/40 hover:bg-white/[0.08] transition"
+            >
+              Skip — load without textures
+            </button>
+          </div>
+        )}
+
         {/* File browser dropdown */}
-        {showFiles && isObjFile && (
+        {showFiles && !needsTextures && isObjFile && (
           <div className="absolute top-full left-0 z-50 mt-1 w-80 max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[#1a1a2e] p-3 text-xs shadow-xl backdrop-blur-sm">
             <div className="mb-2 font-semibold text-white/70">Job Files</div>
             <div className="space-y-1">

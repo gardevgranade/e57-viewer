@@ -240,17 +240,32 @@ export const Route = createFileRoute('/api/model/$jobId')({
 
         // Add MTL file
         const mtlFile = formData.get('mtl')
-        console.log(`[model POST] mtlFile instanceof File: ${mtlFile instanceof File}, type: ${typeof mtlFile}`)
+        let requiredTextures: string[] = []
         if (mtlFile instanceof File) {
           const mtlBytes = await mtlFile.arrayBuffer()
+          const mtlText = Buffer.from(mtlBytes).toString('utf-8')
           const mtlPath = resolve(tmpdir(), `model-upload-${randomUUID()}.mtl`)
           await writeFile(mtlPath, Buffer.from(mtlBytes))
           updateJob(job.id, { mtlPath })
           addedMtl = true
-          console.log(`[model POST] MTL saved to ${mtlPath}, updateJob called`)
-          // Verify update
-          const updated = getJob(job.id)
-          console.log(`[model POST] Verify: mtlPath=${updated?.mtlPath}`)
+          console.log(`[model POST] MTL saved to ${mtlPath}`)
+
+          // Parse MTL to extract texture file references
+          const texRefs = new Set<string>()
+          const texKeywords = ['map_Ka', 'map_Kd', 'map_Ks', 'map_Ns', 'map_d', 'map_bump', 'bump', 'disp', 'decal', 'refl', 'norm', 'map_Pr', 'map_Pm', 'map_Ke']
+          for (const line of mtlText.split('\n')) {
+            const trimmed = line.trim()
+            for (const kw of texKeywords) {
+              if (trimmed.startsWith(kw + ' ') || trimmed.startsWith(kw + '\t')) {
+                // Extract the filename (last token, or after options like -s, -o, etc.)
+                const parts = trimmed.split(/\s+/)
+                const texFile = parts[parts.length - 1].replace(/\\/g, '/')
+                if (texFile) texRefs.add(texFile)
+              }
+            }
+          }
+          requiredTextures = [...texRefs]
+          console.log(`[model POST] MTL references ${requiredTextures.length} textures:`, requiredTextures)
         }
 
         // Add texture files
@@ -274,7 +289,7 @@ export const Route = createFileRoute('/api/model/$jobId')({
         }
 
         return new Response(
-          JSON.stringify({ ok: true, addedMtl, addedTextures }),
+          JSON.stringify({ ok: true, addedMtl, addedTextures, requiredTextures }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       },
