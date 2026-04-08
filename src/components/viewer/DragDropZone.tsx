@@ -106,17 +106,21 @@ export default function DragDropZone() {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file || !jobId) return
+    console.log(`[DragDrop] Uploading MTL "${file.name}" (${file.size} bytes) to job ${jobId}`)
     setIsAddingCompanion(true)
     try {
       const form = new FormData()
       form.append('mtl', file)
       const res = await fetch(`/api/model/${jobId}`, { method: 'POST', body: form })
       const json = await res.json()
+      console.log(`[DragDrop] MTL upload response:`, json)
       if (res.ok && json.addedMtl) {
         setHasMtl(true)
         incrementModelVersion()
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error('[DragDrop] MTL upload error:', err)
+    }
     setIsAddingCompanion(false)
   }, [jobId, incrementModelVersion])
 

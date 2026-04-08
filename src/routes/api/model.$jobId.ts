@@ -219,8 +219,10 @@ export const Route = createFileRoute('/api/model/$jobId')({
 
       // POST: add companion files (MTL, textures) to an existing job
       POST: async ({ params, request }) => {
+        console.log(`[model POST] jobId=${params.jobId}`)
         const job = getJob(params.jobId)
         if (!job) {
+          console.log(`[model POST] job not found!`)
           return new Response(JSON.stringify({ error: 'Job not found' }), {
             status: 404, headers: { 'content-type': 'application/json' },
           })
@@ -238,12 +240,17 @@ export const Route = createFileRoute('/api/model/$jobId')({
 
         // Add MTL file
         const mtlFile = formData.get('mtl')
+        console.log(`[model POST] mtlFile instanceof File: ${mtlFile instanceof File}, type: ${typeof mtlFile}`)
         if (mtlFile instanceof File) {
           const mtlBytes = await mtlFile.arrayBuffer()
           const mtlPath = resolve(tmpdir(), `model-upload-${randomUUID()}.mtl`)
           await writeFile(mtlPath, Buffer.from(mtlBytes))
           updateJob(job.id, { mtlPath })
           addedMtl = true
+          console.log(`[model POST] MTL saved to ${mtlPath}, updateJob called`)
+          // Verify update
+          const updated = getJob(job.id)
+          console.log(`[model POST] Verify: mtlPath=${updated?.mtlPath}`)
         }
 
         // Add texture files
