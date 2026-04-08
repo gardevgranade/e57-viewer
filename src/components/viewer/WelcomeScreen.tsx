@@ -42,7 +42,7 @@ export default function WelcomeScreen() {
       {/* Supported formats */}
       <div className="flex items-center gap-2 text-[10px] text-white/20">
         <span>Supported:</span>
-        {['E57', 'OBJ', 'MTL', 'DAE', 'SKP', 'DXF', 'DWG'].map((f) => (
+        {['E57', 'OBJ', 'MTL', 'PLY', 'DAE', 'SKP', 'DXF', 'DWG'].map((f) => (
           <span key={f} className="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono">
             .{f.toLowerCase()}
           </span>

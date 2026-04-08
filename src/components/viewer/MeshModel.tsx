@@ -7,6 +7,7 @@ import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js'
 import { parseDxfToThree } from '../../lib/dxfLoader.js'
 import { useViewer } from '../../lib/viewerState.js'
 import type { FlyCameraHandle } from './FlyCamera.js'
@@ -162,6 +163,28 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
             }
           })
           console.log(`[MeshModel] OBJ loaded: ${meshCount} meshes`)
+        } else if (fileType === 'ply') {
+          const loader = new PLYLoader()
+          const geometry = await new Promise<THREE.BufferGeometry>((resolve, reject) => {
+            loader.load(url, resolve, undefined, reject)
+          })
+          geometry.computeVertexNormals()
+          const hasColor = !!geometry.getAttribute('color')
+          const hasFaces = !!geometry.index
+          if (hasFaces) {
+            // Mesh PLY
+            const material = hasColor
+              ? new THREE.MeshPhongMaterial({ vertexColors: true, side: THREE.DoubleSide, shininess: 20 })
+              : DEFAULT_MATERIAL.clone()
+            object = new THREE.Mesh(geometry, material)
+          } else {
+            // Point cloud PLY
+            const material = hasColor
+              ? new THREE.PointsMaterial({ size: 0.01, vertexColors: true, sizeAttenuation: true })
+              : new THREE.PointsMaterial({ size: 0.01, color: 0xb0b8c8, sizeAttenuation: true })
+            object = new THREE.Points(geometry, material)
+          }
+          console.log(`[MeshModel] PLY loaded: ${hasFaces ? 'mesh' : 'point cloud'}, vertices=${geometry.attributes.position.count}, color=${hasColor}`)
         } else if (fileType === 'dxf' || fileType === 'dwg') {
           // DXF text (DWG is server-converted to DXF)
           const dxfText = await blob.text()

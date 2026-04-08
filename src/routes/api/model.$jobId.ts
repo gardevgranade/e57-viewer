@@ -16,6 +16,7 @@ const CONTENT_TYPES: Record<string, string> = {
   skp: 'model/gltf-binary',
   dxf: 'text/plain',
   dwg: 'text/plain',
+  ply: 'application/octet-stream',
 }
 
 /** Recursively search a directory for a file by lowercase name. */
