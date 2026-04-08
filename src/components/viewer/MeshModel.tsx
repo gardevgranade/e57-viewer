@@ -21,14 +21,25 @@ const DEFAULT_MATERIAL = new THREE.MeshPhongMaterial({
   shininess: 20,
 })
 
-/** Apply a neutral grey material to any mesh without a colour/texture. */
+/** Apply a neutral grey material to any mesh without a colour/texture. Fix black MTL materials. */
 function applyDefaultMaterial(object: THREE.Object3D) {
   object.traverse((child) => {
     if (child instanceof THREE.Mesh) {
-      const hasMaterial = Array.isArray(child.material)
-        ? child.material.some((m) => m && m.type !== 'MeshBasicMaterial')
-        : child.material && child.material.type !== 'MeshBasicMaterial'
-      if (!hasMaterial) child.material = DEFAULT_MATERIAL
+      const mats = Array.isArray(child.material) ? child.material : [child.material]
+      for (let i = 0; i < mats.length; i++) {
+        const m = mats[i]
+        if (!m || m.type === 'MeshBasicMaterial') {
+          // No real material — apply default
+          if (Array.isArray(child.material)) child.material[i] = DEFAULT_MATERIAL
+          else child.material = DEFAULT_MATERIAL
+        } else if (m instanceof THREE.MeshPhongMaterial || m instanceof THREE.MeshStandardMaterial) {
+          // Fix black MTL materials: if color is black and there's no texture, use grey
+          if (m.color && m.color.getHex() === 0x000000 && !m.map) {
+            m.color.set(0xb0b8c8)
+          }
+          m.side = THREE.DoubleSide
+        }
+      }
     }
   })
 }
@@ -79,25 +90,65 @@ export default function MeshModel({ flyCameraRef }: MeshModelProps) {
             const mtlRes = await fetch(`/api/model/${jobId}?mtl=1`)
             if (mtlRes.ok) {
               const mtlText = await mtlRes.text()
+              console.log('[MeshModel] MTL loaded, length:', mtlText.length)
+              console.log('[MeshModel] MTL content (first 500 chars):', mtlText.slice(0, 500))
+
               const mtlLoader = new MTLLoader()
-              // Custom URL modifier so textures resolve to our API endpoint
+              // Custom LoadingManager: redirect texture URLs to our API + log errors
               const manager = new THREE.LoadingManager()
               manager.setURLModifier((texUrl) => {
                 const name = texUrl.replace(/^(\.\/|\/)+/, '')
-                return `/api/model/${jobId}?texture=${encodeURIComponent(name)}`
+                const resolved = `/api/model/${jobId}?texture=${encodeURIComponent(name)}`
+                console.log(`[MeshModel] Texture URL: "${texUrl}" → "${resolved}"`)
+                return resolved
               })
+              manager.onError = (url) => {
+                console.warn(`[MeshModel] ⚠ Failed to load texture: ${url}`)
+              }
               mtlLoader.manager = manager
               materials = mtlLoader.parse(mtlText, '')
               materials.preload()
+
+              // Log all parsed materials
+              for (const [name, mat] of Object.entries(materials.materials)) {
+                const m = mat as THREE.MeshPhongMaterial
+                console.log(`[MeshModel] Material "${name}":`, {
+                  type: m.type,
+                  color: m.color?.getHexString(),
+                  map: m.map ? 'yes' : 'no',
+                  opacity: m.opacity,
+                })
+              }
+            } else {
+              console.log('[MeshModel] No MTL available (status', mtlRes.status, ')')
             }
-          } catch {
-            // No MTL — proceed with default material
+          } catch (err) {
+            console.warn('[MeshModel] MTL fetch error:', err)
           }
           const loader = new OBJLoader()
-          if (materials) loader.setMaterials(materials)
+          if (materials) {
+            loader.setMaterials(materials)
+            console.log(`[MeshModel] OBJ loading with ${Object.keys(materials.materials).length} MTL materials`)
+          } else {
+            console.log('[MeshModel] OBJ loading without materials')
+          }
           object = await new Promise<THREE.Group>((resolve, reject) => {
             loader.load(url, resolve, undefined, reject)
           })
+          // Log what materials ended up on the meshes
+          let meshCount = 0
+          object.traverse(child => {
+            if (child instanceof THREE.Mesh) {
+              meshCount++
+              const m = child.material as THREE.Material
+              console.log(`[MeshModel] Mesh "${child.name}" material:`, {
+                type: m.type,
+                color: (m as THREE.MeshPhongMaterial).color?.getHexString(),
+                map: (m as THREE.MeshPhongMaterial).map ? 'yes' : 'no',
+              })
+            }
+          })
+          console.log(`[MeshModel] OBJ loaded: ${meshCount} meshes`)
         } else if (fileType === 'dxf' || fileType === 'dwg') {
           // DXF text (DWG is server-converted to DXF)
           const dxfText = await blob.text()

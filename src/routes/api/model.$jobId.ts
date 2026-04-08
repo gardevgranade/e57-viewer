@@ -34,6 +34,23 @@ async function findFileByName(dir: string, targetLower: string): Promise<string 
   return null
 }
 
+/** List all files recursively, returning paths relative to baseDir. */
+async function listFilesRecursive(dir: string, baseDir: string): Promise<string[]> {
+  const result: string[] = []
+  try {
+    const entries = await readdir(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const full = resolve(dir, entry.name)
+      if (entry.isFile()) {
+        result.push(full.slice(baseDir.length + 1))
+      } else if (entry.isDirectory()) {
+        result.push(...await listFilesRecursive(full, baseDir))
+      }
+    }
+  } catch { /* ignore */ }
+  return result
+}
+
 export const Route = createFileRoute('/api/model/$jobId')({
   component: () => null,
   server: {
@@ -47,8 +64,33 @@ export const Route = createFileRoute('/api/model/$jobId')({
           })
         }
 
-        // Serve the companion MTL file when ?mtl=1
         const url = new URL(request.url)
+
+        // Serve job file info when ?info=1
+        if (url.searchParams.get('info') === '1') {
+          const info: {
+            jobId: string; fileType: string; hasMtl: boolean
+            mtlPath?: string; hasTextures: boolean
+            textureDir?: string; textureFiles: string[]
+          } = {
+            jobId: job.id,
+            fileType: job.fileType,
+            hasMtl: !!job.mtlPath,
+            mtlPath: job.mtlPath,
+            hasTextures: !!job.textureDir,
+            textureDir: job.textureDir,
+            textureFiles: [],
+          }
+          if (job.textureDir && existsSync(job.textureDir)) {
+            info.textureFiles = await listFilesRecursive(job.textureDir, job.textureDir)
+          }
+          return new Response(JSON.stringify(info, null, 2), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+
+        // Serve the companion MTL file when ?mtl=1
         if (url.searchParams.get('mtl') === '1') {
           if (!job.mtlPath) {
             return new Response(JSON.stringify({ error: 'No MTL file for this job' }), {

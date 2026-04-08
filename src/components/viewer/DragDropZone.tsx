@@ -144,6 +144,20 @@ export default function DragDropZone() {
     setIsAddingCompanion(false)
   }, [jobId, incrementModelVersion])
 
+  const [showFiles, setShowFiles] = useState(false)
+  const [jobFiles, setJobFiles] = useState<{ hasMtl: boolean; textureFiles: string[] } | null>(null)
+
+  const fetchJobInfo = useCallback(async () => {
+    if (!jobId) return
+    try {
+      const res = await fetch(`/api/model/${jobId}?info=1`)
+      if (res.ok) {
+        const info = await res.json()
+        setJobFiles({ hasMtl: info.hasMtl, textureFiles: info.textureFiles ?? [] })
+      }
+    } catch { /* ignore */ }
+  }, [jobId])
+
   const isUploading = streamStatus === 'uploading'
   const isActive = streamStatus === 'streaming' || streamStatus === 'done'
 
@@ -163,42 +177,97 @@ export default function DragDropZone() {
 
   if (isActive) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs backdrop-blur-sm">
-        <span className="truncate max-w-[160px] text-white/70">{fileName}</span>
-        <span className="text-white/25">{formatBytes(fileSize ?? 0)}</span>
-        <button
-          onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
-          className="ml-1 flex items-center gap-1 rounded bg-teal-500/20 px-2 py-0.5 text-[10px] font-medium text-teal-300 hover:bg-teal-500/30 transition"
-        >
-          <CloudUploadIcon className="h-3 w-3" /> Open File
-        </button>
-        {/* Companion file buttons for OBJ */}
-        {isObjFile && !hasMtl && (
+      <div className="relative">
+        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs backdrop-blur-sm">
+          <span className="truncate max-w-[160px] text-white/70">{fileName}</span>
+          <span className="text-white/25">{formatBytes(fileSize ?? 0)}</span>
           <button
-            onClick={(e) => { e.stopPropagation(); mtlInputRef.current?.click() }}
-            className="flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-300 hover:bg-amber-500/30 transition"
+            onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
+            className="ml-1 flex items-center gap-1 rounded bg-teal-500/20 px-2 py-0.5 text-[10px] font-medium text-teal-300 hover:bg-teal-500/30 transition"
           >
-            + MTL
+            <CloudUploadIcon className="h-3 w-3" /> Open File
           </button>
+          {/* Companion file buttons for OBJ */}
+          {isObjFile && !hasMtl && (
+            <button
+              onClick={(e) => { e.stopPropagation(); mtlInputRef.current?.click() }}
+              className="flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-300 hover:bg-amber-500/30 transition"
+            >
+              + MTL
+            </button>
+          )}
+          {isObjFile && hasMtl && (
+            <span className="flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+              ✓ MTL
+            </span>
+          )}
+          {isObjFile && (
+            <button
+              onClick={(e) => { e.stopPropagation(); textureInputRef.current?.click() }}
+              className="flex items-center gap-1 rounded bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300 hover:bg-violet-500/30 transition"
+            >
+              {hasTextures ? '+ More Textures' : '+ Texture Folder'}
+            </button>
+          )}
+          {/* File browser toggle */}
+          {isObjFile && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!showFiles) fetchJobInfo()
+                setShowFiles(!showFiles)
+              }}
+              className="flex items-center gap-1 rounded bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-white/50 hover:bg-white/10 hover:text-white/70 transition"
+            >
+              📁 Files
+            </button>
+          )}
+          {/* Hidden inputs */}
+          <input ref={inputRef} type="file" accept={ACCEPT_ATTR} multiple className="hidden" onChange={onInputChange} />
+          <input ref={mtlInputRef} type="file" accept=".mtl" className="hidden" onChange={onMtlChange} />
+          {/* @ts-expect-error webkitdirectory is non-standard but widely supported */}
+          <input ref={textureInputRef} type="file" webkitdirectory="" directory="" className="hidden" onChange={onTextureChange} />
+        </div>
+
+        {/* File browser dropdown */}
+        {showFiles && isObjFile && (
+          <div className="absolute top-full left-0 z-50 mt-1 w-80 max-h-60 overflow-y-auto rounded-lg border border-white/10 bg-[#1a1a2e] p-3 text-xs shadow-xl backdrop-blur-sm">
+            <div className="mb-2 font-semibold text-white/70">Job Files</div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-white/40">OBJ:</span>
+                <span className="text-white/70">{fileName}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-white/40">MTL:</span>
+                <span className={jobFiles?.hasMtl ? 'text-emerald-400' : 'text-white/30'}>
+                  {jobFiles?.hasMtl ? '✓ loaded' : '— not uploaded'}
+                </span>
+              </div>
+              <div className="mt-2">
+                <span className="text-white/40">Textures ({jobFiles?.textureFiles.length ?? 0}):</span>
+                {jobFiles && jobFiles.textureFiles.length > 0 ? (
+                  <div className="mt-1 space-y-0.5 pl-2">
+                    {jobFiles.textureFiles.map((f, i) => (
+                      <div key={i} className="flex items-center gap-1 text-[10px]">
+                        <span className="text-emerald-400/60">✓</span>
+                        <span className="text-white/50 truncate">{f}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-1 pl-2 text-[10px] text-white/30">No textures uploaded</div>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => fetchJobInfo()}
+              className="mt-2 w-full rounded bg-white/[0.06] px-2 py-1 text-[10px] text-white/50 hover:bg-white/10 transition"
+            >
+              ↻ Refresh
+            </button>
+          </div>
         )}
-        {isObjFile && hasMtl && (
-          <span className="flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-            ✓ MTL
-          </span>
-        )}
-        {isObjFile && (
-          <button
-            onClick={(e) => { e.stopPropagation(); textureInputRef.current?.click() }}
-            className="flex items-center gap-1 rounded bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300 hover:bg-violet-500/30 transition"
-          >
-            {hasTextures ? '+ More Textures' : '+ Texture Folder'}
-          </button>
-        )}
-        {/* Hidden inputs */}
-        <input ref={inputRef} type="file" accept={ACCEPT_ATTR} multiple className="hidden" onChange={onInputChange} />
-        <input ref={mtlInputRef} type="file" accept=".mtl" className="hidden" onChange={onMtlChange} />
-        {/* @ts-expect-error webkitdirectory is non-standard but widely supported */}
-        <input ref={textureInputRef} type="file" webkitdirectory="" directory="" className="hidden" onChange={onTextureChange} />
       </div>
     )
   }
