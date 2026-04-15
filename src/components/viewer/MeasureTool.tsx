@@ -298,6 +298,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
       justFinishedDragRef.current = moved
       setDraggingIdx(null)
       flyCameraRef.current?.setMeasureMode(false)
+      gl.domElement.style.cursor = ''
       if (moved && dragPointsRef.current) {
         onUpdatePoints(m.id, dragPointsRef.current, m.isClosed)
       }
@@ -386,9 +387,17 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
             position={[p.x, p.y, p.z]}
             renderOrder={999}
             userData={{ isMeasurement: true }}
-            onPointerEnter={(e) => { e.stopPropagation(); setHovered(i) }}
-            onPointerLeave={() => { if (draggingIdx === null) setHovered(null) }}
-            onPointerOut={() => { if (draggingIdx === null) setHovered(h => h === i ? null : h) }}
+            onPointerEnter={(e) => {
+              e.stopPropagation()
+              setHovered(i)
+              if (!measureActive) gl.domElement.style.cursor = 'grab'
+            }}
+            onPointerLeave={() => {
+              if (draggingIdx === null) { setHovered(null); gl.domElement.style.cursor = '' }
+            }}
+            onPointerOut={() => {
+              if (draggingIdx === null) { setHovered(h => h === i ? null : h); gl.domElement.style.cursor = '' }
+            }}
             onPointerDown={(e) => {
               if (!canDrag) return
               e.stopPropagation()
@@ -396,6 +405,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
               setDraggingIdx(i)
               setDragPoints([...m.points])
               gl.domElement.setPointerCapture(e.pointerId)
+              gl.domElement.style.cursor = 'grabbing'
             }}
             onClick={(e) => {
               e.stopPropagation()
@@ -600,28 +610,6 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
               >
                 🗑 Delete
               </button>
-            </div>
-          </Html>
-        )
-      })()}
-
-      {/* Tooltip on point hover */}
-      {typeof hovered === 'number' && draggingIdx === null && (() => {
-        const isEnd = hovered === 0 || hovered === pts.length - 1
-        const canContinue = isEnd && !m.isClosed && measureActive
-        const canDrag = !measureActive
-        if (!canContinue && !canDrag) return null
-        return (
-          <Html position={[pts[hovered].x, pts[hovered].y + dotRadius * 10, pts[hovered].z]} center occlude={false}>
-            <div style={{
-              background: 'rgba(15,15,25,0.9)',
-              color: canDrag ? '#fbbf24' : '#4ade80',
-              padding: '3px 8px', borderRadius: 5, fontSize: 10,
-              fontFamily: 'system-ui', whiteSpace: 'nowrap',
-              pointerEvents: 'none',
-              border: `1px solid ${canDrag ? 'rgba(251,191,36,0.3)' : 'rgba(74,222,128,0.3)'}`,
-            }}>
-              {canDrag ? 'Drag to edit' : 'Click to continue measuring'}
             </div>
           </Html>
         )
