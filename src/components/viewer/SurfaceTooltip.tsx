@@ -12,10 +12,8 @@ function fmtArea(m2: number) {
   return `${(m2 / 10000).toFixed(2)} ha`
 }
 
-function swapType(label: string) {
-  if (/^roof/i.test(label)) return label.replace(/^roof/i, 'Floor')
-  if (/^floor/i.test(label)) return label.replace(/^floor/i, 'Roof')
-  return label
+function changeType(label: string, target: 'Wall' | 'Roof' | 'Floor'): string {
+  return label.replace(/^(wall|roof|floor)/i, target)
 }
 
 function slopeAngle(normal: [number, number, number] | undefined) {
@@ -72,7 +70,7 @@ export default function SurfaceTooltip() {
 
   if (!surf || !selectedSurfaceId || measureActive || boxSelectMode) return null
 
-  const isRoofOrFloor = /^(roof|floor)/i.test(surf.label)
+  const surfType = /^roof/i.test(surf.label) ? 'Roof' : /^floor/i.test(surf.label) ? 'Floor' : /^wall/i.test(surf.label) ? 'Wall' : null
   const type = surf.label.toLowerCase().startsWith('roof') ? 'roof'
     : surf.label.toLowerCase().startsWith('floor') ? 'floor' : null
   const param = type === 'roof'
@@ -248,19 +246,22 @@ export default function SurfaceTooltip() {
         )}
       </div>
 
-      {/* ── Visibility + type swap ── */}
+      {/* ── Visibility + type change ── */}
       <div style={{ display: 'flex', gap: 5 }}>
         <button style={BTN} onClick={() => updateSurface(surf.id, { visible: !surf.visible })}>
           {surf.visible ? '👁 Hide' : '🙈 Show'}
         </button>
-        {isRoofOrFloor && (
-          <button style={BTN}
-            onClick={() => updateSurface(surf.id, { label: swapType(surf.label) })}
-            title={/^roof/i.test(surf.label) ? 'Mark as Floor' : 'Mark as Roof'}
-          >
-            {/^roof/i.test(surf.label) ? '⬇ → Floor' : '⬆ → Roof'}
-          </button>
-        )}
+        {surfType && (['Wall', 'Roof', 'Floor'] as const)
+          .filter(t => t !== surfType)
+          .map(t => (
+            <button key={t} style={BTN}
+              onClick={() => updateSurface(surf.id, { label: changeType(surf.label, t) })}
+              title={`Change to ${t}`}
+            >
+              → {t}
+            </button>
+          ))
+        }
       </div>
 
       {/* ── Measure + Split ── */}
