@@ -503,12 +503,19 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
         )
       })()}
 
-      {/* Context menu on point click — delete point */}
+      {/* Context menu on point click — add point / delete point / delete measurement */}
       {showMenu?.type === 'point' && (() => {
         const i = showMenu.ptIdx
         const p = pts[i]
-        // Need at least 2 points to keep a valid measurement after deletion
         const canDeletePt = pts.length > 2
+        // Insert after this point (or before first point on closed shapes)
+        const hasNextSeg = i < pts.length - 1 || m.isClosed
+        const hasPrevSeg = i > 0 || m.isClosed
+        const btnStyle: React.CSSProperties = {
+          display: 'block', width: '100%', padding: '6px 14px',
+          background: 'none', border: 'none',
+          cursor: 'pointer', textAlign: 'left', fontSize: 12,
+        }
         return (
           <Html position={[p.x, p.y + dotRadius * 3, p.z]} center occlude={false}>
             <div style={{
@@ -516,20 +523,55 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
               borderRadius: 8, padding: '4px 0', minWidth: 140, fontFamily: 'system-ui',
               fontSize: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
             }}>
+              {hasNextSeg && (() => {
+                const nextIdx = (i + 1) % pts.length
+                const q = pts[nextIdx]
+                return (
+                  <button
+                    onClick={() => {
+                      const midPt = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, z: (p.z + q.z) / 2 }
+                      const newPts = [...m.points]
+                      newPts.splice(i + 1, 0, midPt)
+                      onUpdatePoints(m.id, newPts, m.isClosed)
+                      setShowMenu(null)
+                    }}
+                    style={{ ...btnStyle, color: '#60a5fa' }}
+                    onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(96,165,250,0.15)' }}
+                    onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none' }}
+                  >
+                    ＋ Add point after
+                  </button>
+                )
+              })()}
+              {hasPrevSeg && (() => {
+                const prevIdx = (i - 1 + pts.length) % pts.length
+                const q = pts[prevIdx]
+                return (
+                  <button
+                    onClick={() => {
+                      const midPt = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, z: (p.z + q.z) / 2 }
+                      const newPts = [...m.points]
+                      newPts.splice(i, 0, midPt)
+                      onUpdatePoints(m.id, newPts, m.isClosed)
+                      setShowMenu(null)
+                    }}
+                    style={{ ...btnStyle, color: '#60a5fa' }}
+                    onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(96,165,250,0.15)' }}
+                    onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none' }}
+                  >
+                    ＋ Add point before
+                  </button>
+                )
+              })()}
               {canDeletePt && (
                 <button
                   onClick={() => {
                     const newPts = m.points.filter((_, idx) => idx !== i)
-                    // If it was closed and we drop below 3 points, unclose
                     const newClosed = m.isClosed && newPts.length >= 3 ? m.isClosed : false
                     onUpdatePoints(m.id, newPts, newClosed)
                     setShowMenu(null)
                   }}
-                  style={{
-                    display: 'block', width: '100%', padding: '6px 14px',
-                    color: '#ef4444', background: 'none', border: 'none',
-                    cursor: 'pointer', textAlign: 'left', fontSize: 12,
-                  }}
+                  style={{ ...btnStyle, color: '#ef4444' }}
                   onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(239,68,68,0.15)' }}
                   onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none' }}
                 >
@@ -538,11 +580,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
               )}
               <button
                 onClick={() => { onDelete(m.id); setShowMenu(null) }}
-                style={{
-                  display: 'block', width: '100%', padding: '6px 14px',
-                  color: '#ef4444', background: 'none', border: 'none',
-                  cursor: 'pointer', textAlign: 'left', fontSize: 12,
-                }}
+                style={{ ...btnStyle, color: '#ef4444' }}
                 onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(239,68,68,0.15)' }}
                 onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none' }}
               >
