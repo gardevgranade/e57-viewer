@@ -496,7 +496,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
         }
         return (
           <Html position={[mx, my + dotRadius * 10, mz]} center occlude={false}>
-            <div style={{
+            <div onPointerDown={(e) => e.stopPropagation()} style={{
               background: 'rgba(15,15,25,0.95)', border: '1px solid rgba(255,255,255,0.15)',
               borderRadius: 6, padding: '2px 0', minWidth: 100, fontFamily: 'system-ui',
               fontSize: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
@@ -542,7 +542,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
         }
         return (
           <Html position={[p.x, p.y + dotRadius * 10, p.z]} center occlude={false}>
-            <div style={{
+            <div onPointerDown={(e) => e.stopPropagation()} style={{
               background: 'rgba(15,15,25,0.95)', border: '1px solid rgba(255,255,255,0.15)',
               borderRadius: 6, padding: '2px 0', minWidth: 100, fontFamily: 'system-ui',
               fontSize: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
