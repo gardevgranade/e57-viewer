@@ -45,6 +45,68 @@ function centroid(pts: MeasurePoint[]): [number, number, number] {
   ]
 }
 
+/** Angle (in degrees) between vectors (prev→vertex) and (vertex→next), 0–180 */
+function angleBetween(prev: MeasurePoint, vertex: MeasurePoint, next: MeasurePoint): number {
+  const ax = prev.x - vertex.x, ay = prev.y - vertex.y, az = prev.z - vertex.z
+  const bx = next.x - vertex.x, by = next.y - vertex.y, bz = next.z - vertex.z
+  const dot = ax * bx + ay * by + az * bz
+  const la = Math.sqrt(ax * ax + ay * ay + az * az)
+  const lb = Math.sqrt(bx * bx + by * by + bz * bz)
+  if (la < 1e-12 || lb < 1e-12) return 0
+  return Math.acos(Math.max(-1, Math.min(1, dot / (la * lb)))) * (180 / Math.PI)
+}
+
+/** Snap an angle (degrees) to nearest multiple of 15° */
+function snapAngle15(deg: number): number {
+  return Math.round(deg / 15) * 15
+}
+
+/** Given prevPt, fromPt, and a candidate target, compute the nearest 15° guide direction
+ *  Returns { snappedAngle, guideEnd } where guideEnd is a point along the snapped direction.
+ *  Uses the plane defined by the three points (or fallback to world-up). */
+function computeAngleGuide(
+  prevPt: MeasurePoint,
+  fromPt: MeasurePoint,
+  targetPt: MeasurePoint,
+  guideLength: number,
+): { angleDeg: number; snappedAngle: number; guideEnd: [number, number, number] } {
+  const dirIn = new THREE.Vector3(fromPt.x - prevPt.x, fromPt.y - prevPt.y, fromPt.z - prevPt.z)
+  const dirOut = new THREE.Vector3(targetPt.x - fromPt.x, targetPt.y - fromPt.y, targetPt.z - fromPt.z)
+  const outLen = dirOut.length()
+  if (dirIn.length() < 1e-12 || outLen < 1e-12) {
+    return { angleDeg: 0, snappedAngle: 0, guideEnd: [fromPt.x, fromPt.y, fromPt.z] }
+  }
+
+  // Compute plane normal (cross of the two directions)
+  const normal = new THREE.Vector3().crossVectors(dirIn, dirOut)
+  if (normal.length() < 1e-12) {
+    // Collinear — pick an arbitrary perpendicular
+    normal.set(0, 1, 0)
+    if (Math.abs(dirIn.dot(normal)) > 0.99 * dirIn.length()) normal.set(1, 0, 0)
+    normal.crossVectors(dirIn, normal)
+  }
+  normal.normalize()
+
+  const angleDeg = angleBetween(prevPt, fromPt, targetPt)
+  const snappedAngle = snapAngle15(angleDeg)
+
+  // Rotate dirIn (reversed to point away from prevPt→fromPt) by snappedAngle around normal
+  const inDir = dirIn.clone().normalize()
+  const snappedRad = snappedAngle * (Math.PI / 180)
+
+  // Determine rotation sign: is the actual angle CW or CCW around normal?
+  const cross = new THREE.Vector3().crossVectors(inDir, dirOut.clone().normalize())
+  const sign = cross.dot(normal) >= 0 ? 1 : -1
+
+  const rotated = inDir.clone().applyAxisAngle(normal, sign * snappedRad).multiplyScalar(guideLength)
+
+  return {
+    angleDeg,
+    snappedAngle,
+    guideEnd: [fromPt.x + rotated.x, fromPt.y + rotated.y, fromPt.z + rotated.z],
+  }
+}
+
 function makeRaycaster(bbox: ReturnType<typeof useViewer>['bbox']) {
   const span = bbox
     ? Math.max(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY, bbox.maxZ - bbox.minZ)
@@ -676,6 +738,89 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
         </>
       )}
 
+      {/* Preview line from last point to ghost + angle guide */}
+      {ghost && !isClosed && measureActive && points.length >= 1 && (() => {
+        const lastPt = points[points.length - 1]
+        const ghostPt: MeasurePoint = { x: ghost.pos.x, y: ghost.pos.y, z: ghost.pos.z }
+        const previewFrom: [number, number, number] = [lastPt.x, lastPt.y, lastPt.z]
+        const previewTo: [number, number, number] = [ghostPt.x, ghostPt.y, ghostPt.z]
+        const previewDist = dist3(lastPt, ghostPt)
+
+        // Angle guide only when we have a previous segment
+        const hasPrev = points.length >= 2
+        const prevPt = hasPrev ? points[points.length - 2] : null
+
+        let angleInfo: ReturnType<typeof computeAngleGuide> | null = null
+        if (hasPrev && prevPt && previewDist > 1e-6) {
+          angleInfo = computeAngleGuide(prevPt, lastPt, ghostPt, previewDist * 0.8)
+        }
+
+        // Midpoint for the distance label
+        const [mx, my, mz] = mid3(lastPt, ghostPt)
+
+        return (
+          <>
+            {/* Dashed preview line */}
+            <Line
+              points={[previewFrom, previewTo]}
+              color="#f97316"
+              lineWidth={1}
+              dashed
+              dashSize={dotRadius * 2}
+              gapSize={dotRadius * 1.5}
+              depthTest={false}
+            />
+
+            {/* Preview distance label */}
+            {previewDist > 1e-4 && (
+              <Html position={[mx, my + dotRadius * 2, mz]} center occlude={false}>
+                <div style={{
+                  background: 'rgba(0,0,0,0.75)', color: '#f97316',
+                  padding: '2px 7px', borderRadius: 5, fontSize: 10,
+                  fontFamily: 'monospace', whiteSpace: 'nowrap',
+                  pointerEvents: 'none', border: '1px solid rgba(249,115,22,0.3)',
+                  opacity: 0.8,
+                }}>
+                  {fmt(previewDist)}
+                </div>
+              </Html>
+            )}
+
+            {/* 15° snap guide line */}
+            {angleInfo && Math.abs(angleInfo.angleDeg - angleInfo.snappedAngle) < 14 && (
+              <Line
+                points={[previewFrom, angleInfo.guideEnd]}
+                color="#7c3aed"
+                lineWidth={1}
+                dashed
+                dashSize={dotRadius * 1.5}
+                gapSize={dotRadius * 1}
+                depthTest={false}
+              />
+            )}
+
+            {/* Angle badge at the vertex */}
+            {angleInfo && (
+              <Html position={[lastPt.x, lastPt.y + dotRadius * 3, lastPt.z]} center occlude={false}>
+                <div style={{
+                  background: 'rgba(0,0,0,0.82)',
+                  color: Math.abs(angleInfo.angleDeg - angleInfo.snappedAngle) < 2 ? '#a78bfa' : '#94a3b8',
+                  padding: '2px 7px', borderRadius: 5, fontSize: 10,
+                  fontFamily: 'monospace', whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                  border: `1px solid ${Math.abs(angleInfo.angleDeg - angleInfo.snappedAngle) < 2 ? 'rgba(167,139,250,0.5)' : 'rgba(148,163,184,0.3)'}`,
+                }}>
+                  {angleInfo.angleDeg.toFixed(1)}°
+                  {Math.abs(angleInfo.angleDeg - angleInfo.snappedAngle) < 2 && (
+                    <span style={{ color: '#a78bfa', marginLeft: 3 }}>⟨{angleInfo.snappedAngle}°⟩</span>
+                  )}
+                </div>
+              </Html>
+            )}
+          </>
+        )
+      })()}
+
       {/* Active measurement dots */}
       {points.map((p, i) => {
         const isFirst = i === 0
@@ -715,6 +860,32 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
       {points.length >= 2 && closedLinePoints.length >= 2 && (
         <Line points={closedLinePoints} color="#f97316" lineWidth={2} depthTest={false} />
       )}
+
+      {/* Angle labels at interior vertices of active measurement */}
+      {points.length >= 3 && points.map((p, i) => {
+        // For open polylines: angles at vertices 1..n-2 (interior)
+        // For closed: angles at all vertices
+        if (!isClosed && (i === 0 || i === points.length - 1)) return null
+        const prev = isClosed
+          ? points[(i - 1 + points.length) % points.length]
+          : points[i - 1]
+        const next = isClosed
+          ? points[(i + 1) % points.length]
+          : points[i + 1]
+        const angle = angleBetween(prev, p, next)
+        return (
+          <Html key={`angle-${i}`} position={[p.x, p.y - dotRadius * 2.5, p.z]} center occlude={false}>
+            <div style={{
+              background: 'rgba(0,0,0,0.7)', color: '#a78bfa',
+              padding: '1px 5px', borderRadius: 4, fontSize: 9,
+              fontFamily: 'monospace', whiteSpace: 'nowrap',
+              pointerEvents: 'none', border: '1px solid rgba(167,139,250,0.3)',
+            }}>
+              {angle.toFixed(1)}°
+            </div>
+          </Html>
+        )
+      })}
 
       {points.slice(0, -1).map((p, i) => {
         if (hoveredIdx !== i && hoveredIdx !== i + 1) return null
