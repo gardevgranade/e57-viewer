@@ -40,16 +40,14 @@ interface SurfaceRowProps {
   onRef?: (el: HTMLDivElement | null) => void
 }
 
-/** Swap the type prefix of a label: Roof ↔ Floor */
-function swapType(label: string): string {
-  if (/^roof/i.test(label)) return label.replace(/^roof/i, 'Floor')
-  if (/^floor/i.test(label)) return label.replace(/^floor/i, 'Roof')
-  return label
+/** Swap the type prefix of a label to a target type */
+function changeType(label: string, target: 'Wall' | 'Roof' | 'Floor'): string {
+  return label.replace(/^(wall|roof|floor)/i, target)
 }
 
 function SurfaceRow({ surf, groups, selected, onUpdate, onRemove, onSplit, onTrace, onHover, onSelect, param, onRef }: SurfaceRowProps) {
   const { fmtArea } = useUnits()
-  const isRoofOrFloor = /^(roof|floor)/i.test(surf.label)
+  const surfType = /^roof/i.test(surf.label) ? 'Roof' : /^floor/i.test(surf.label) ? 'Floor' : /^wall/i.test(surf.label) ? 'Wall' : null
   return (
     <div
       ref={onRef}
@@ -101,15 +99,23 @@ function SurfaceRow({ surf, groups, selected, onUpdate, onRemove, onSplit, onTra
             : ''}
       </span>
 
-      {/* Type swap: Roof ↔ Floor */}
-      {isRoofOrFloor && (
-        <button
-          onClick={() => onUpdate(surf.id, { label: swapType(surf.label) })}
-          title={/^roof/i.test(surf.label) ? 'Change to Floor' : 'Change to Roof'}
-          style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 10, padding: 0, lineHeight: 1, flexShrink: 0 }}
+      {/* Type change: Wall / Roof / Floor */}
+      {surfType && (
+        <select
+          value={surfType}
+          onClick={e => e.stopPropagation()}
+          onChange={e => onUpdate(surf.id, { label: changeType(surf.label, e.target.value as 'Wall' | 'Roof' | 'Floor') })}
+          title="Change surface type"
+          style={{
+            background: '#1e293b', border: '1px solid #334155',
+            color: '#94a3b8', fontSize: 9, borderRadius: 3, padding: '0px 1px',
+            cursor: 'pointer', flexShrink: 0,
+          }}
         >
-          {/^roof/i.test(surf.label) ? '⬇' : '⬆'}
-        </button>
+          {(['Wall', 'Roof', 'Floor'] as const).map(t => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
       )}
 
       {/* Group assignment dropdown */}
