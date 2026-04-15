@@ -35,6 +35,14 @@ export default function DragDropZone() {
   const [requiredTextures, setRequiredTextures] = useState<string[]>([])
   const [textureFolder, setTextureFolder] = useState<string | null>(null)
 
+  // Address import state
+  const [mode, setMode] = useState<'file' | 'address'>('file')
+  const [addresses, setAddresses] = useState<string[]>([''])
+  const [radius, setRadius] = useState<string>('')
+  const [addressFilter, setAddressFilter] = useState(false)
+  const [addressLoading, setAddressLoading] = useState(false)
+  const [addressError, setAddressError] = useState<string | null>(null)
+
   const handleFile = useCallback(
     async (file: File, mtlFile?: File) => {
       const ext = getExtension(file.name)
@@ -115,6 +123,41 @@ export default function DragDropZone() {
     }
     e.target.value = ''
   }
+
+  const handleAddressImport = useCallback(async () => {
+    const validAddresses = addresses.map(a => a.trim()).filter(Boolean)
+    if (validAddresses.length === 0) {
+      setAddressError('Please enter at least one address')
+      return
+    }
+    setAddressError(null)
+    setAddressLoading(true)
+    reset()
+    try {
+      const res = await fetch('/api/address-import', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          addresses: validAddresses,
+          radius: radius ? Number(radius) : undefined,
+          addressFilter: addressFilter || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setAddressError(json.error ?? `Import failed (${res.status})`)
+        setAddressLoading(false)
+        return
+      }
+      setUploading(json.fileName, json.size)
+      setFileType(json.fileType ?? 'glb')
+      setJobId(json.jobId)
+      setStreamStatus('streaming')
+    } catch (err) {
+      setAddressError(err instanceof Error ? err.message : 'Address import failed')
+    }
+    setAddressLoading(false)
+  }, [addresses, radius, addressFilter, reset, setUploading, setFileType, setJobId, setStreamStatus])
 
   /** Upload companion MTL file to existing job */
   const onMtlChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -380,29 +423,149 @@ export default function DragDropZone() {
   }
 
   return (
-    <div
-      onDrop={onDrop}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onClick={() => inputRef.current?.click()}
-      className={[
-        'flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center transition-all select-none',
-        isDragging
-          ? 'border-teal-400 bg-teal-400/10'
-          : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10',
-      ].join(' ')}
-    >
-      <input ref={inputRef} type="file" accept={ACCEPT_ATTR} multiple className="hidden" onChange={onInputChange} />
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10">
-        <CloudUploadIcon className="h-7 w-7 text-teal-400" />
+    <div className="w-full space-y-4">
+      {/* Mode tabs */}
+      <div className="flex gap-1 rounded-xl bg-white/5 p-1">
+        <button
+          onClick={() => setMode('file')}
+          className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition ${
+            mode === 'file'
+              ? 'bg-white/10 text-white shadow-sm'
+              : 'text-white/40 hover:text-white/60'
+          }`}
+        >
+          📁 Upload File
+        </button>
+        <button
+          onClick={() => setMode('address')}
+          className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition ${
+            mode === 'address'
+              ? 'bg-white/10 text-white shadow-sm'
+              : 'text-white/40 hover:text-white/60'
+          }`}
+        >
+          🏠 Load from Address
+        </button>
       </div>
-      <div>
-        <p className="text-base font-semibold text-white">
-          {isDragging ? 'Drop your 3D file' : 'Drop a 3D file here'}
-        </p>
-        <p className="mt-1 text-sm text-white/50">or click to browse</p>
-        <p className="mt-1 text-xs text-white/30">E57 · DAE · OBJ (+MTL) · PLY · GLB · GLTF · SKP · DXF · DWG</p>
-      </div>
+
+      {mode === 'file' ? (
+        /* File upload drop zone */
+        <div
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onClick={() => inputRef.current?.click()}
+          className={[
+            'flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center transition-all select-none',
+            isDragging
+              ? 'border-teal-400 bg-teal-400/10'
+              : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10',
+          ].join(' ')}
+        >
+          <input ref={inputRef} type="file" accept={ACCEPT_ATTR} multiple className="hidden" onChange={onInputChange} />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10">
+            <CloudUploadIcon className="h-7 w-7 text-teal-400" />
+          </div>
+          <div>
+            <p className="text-base font-semibold text-white">
+              {isDragging ? 'Drop your 3D file' : 'Drop a 3D file here'}
+            </p>
+            <p className="mt-1 text-sm text-white/50">or click to browse</p>
+            <p className="mt-1 text-xs text-white/30">E57 · DAE · OBJ (+MTL) · PLY · GLB · GLTF · SKP · DXF · DWG</p>
+          </div>
+        </div>
+      ) : (
+        /* Address import form */
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-white/60">Addresses</label>
+            {addresses.map((addr, i) => (
+              <div key={i} className="flex gap-2">
+                <input
+                  type="text"
+                  value={addr}
+                  onChange={(e) => {
+                    const next = [...addresses]
+                    next[i] = e.target.value
+                    setAddresses(next)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && addr.trim()) {
+                      e.preventDefault()
+                      if (i === addresses.length - 1) setAddresses([...addresses, ''])
+                      else handleAddressImport()
+                    }
+                  }}
+                  placeholder="e.g. Markusstr 8, 41751 Viersen"
+                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/25 outline-none focus:border-teal-500/50 transition"
+                />
+                {addresses.length > 1 && (
+                  <button
+                    onClick={() => setAddresses(addresses.filter((_, j) => j !== i))}
+                    className="rounded-lg px-2 text-white/30 hover:text-red-400 hover:bg-red-400/10 transition"
+                    title="Remove address"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              onClick={() => setAddresses([...addresses, ''])}
+              className="text-xs text-teal-400/70 hover:text-teal-400 transition"
+            >
+              + Add another address
+            </button>
+          </div>
+
+          {/* Options row */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-white/50">Radius (m)</label>
+              <input
+                type="number"
+                value={radius}
+                onChange={(e) => setRadius(e.target.value)}
+                placeholder="0"
+                min={0}
+                className="w-16 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder-white/25 outline-none focus:border-teal-500/50 transition"
+              />
+            </div>
+            <label className="flex items-center gap-1.5 text-xs text-white/50 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={addressFilter}
+                onChange={(e) => setAddressFilter(e.target.checked)}
+                className="rounded border-white/20 bg-white/5 accent-teal-500"
+              />
+              Address filter
+            </label>
+          </div>
+
+          {/* Error message */}
+          {addressError && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-300">
+              {addressError}
+            </div>
+          )}
+
+          {/* Submit button */}
+          <button
+            onClick={handleAddressImport}
+            disabled={addressLoading || addresses.every(a => !a.trim())}
+            className="w-full rounded-xl bg-teal-500/20 px-4 py-2.5 text-sm font-medium text-teal-300 hover:bg-teal-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
+          >
+            {addressLoading ? (
+              <>
+                <SpinnerIcon className="h-4 w-4 animate-spin" />
+                Loading building…
+              </>
+            ) : (
+              <>🏠 Load Building</>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

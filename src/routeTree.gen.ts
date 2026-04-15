@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiUploadRouteImport } from './routes/api/upload'
+import { Route as ApiAddressImportRouteImport } from './routes/api/address-import'
 import { Route as ApiStreamJobIdRouteImport } from './routes/api/stream.$jobId'
 import { Route as ApiModelJobIdRouteImport } from './routes/api/model.$jobId'
 import { Route as ApiMeshJobIdRouteImport } from './routes/api/mesh.$jobId'
@@ -30,6 +31,11 @@ const IndexRoute = IndexRouteImport.update({
 const ApiUploadRoute = ApiUploadRouteImport.update({
   id: '/api/upload',
   path: '/api/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAddressImportRoute = ApiAddressImportRouteImport.update({
+  id: '/api/address-import',
+  path: '/api/address-import',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiStreamJobIdRoute = ApiStreamJobIdRouteImport.update({
@@ -56,6 +62,7 @@ const ApiCompanionJobIdRoute = ApiCompanionJobIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/api/address-import': typeof ApiAddressImportRoute
   '/api/upload': typeof ApiUploadRoute
   '/api/companion/$jobId': typeof ApiCompanionJobIdRoute
   '/api/mesh/$jobId': typeof ApiMeshJobIdRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/api/address-import': typeof ApiAddressImportRoute
   '/api/upload': typeof ApiUploadRoute
   '/api/companion/$jobId': typeof ApiCompanionJobIdRoute
   '/api/mesh/$jobId': typeof ApiMeshJobIdRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/api/address-import': typeof ApiAddressImportRoute
   '/api/upload': typeof ApiUploadRoute
   '/api/companion/$jobId': typeof ApiCompanionJobIdRoute
   '/api/mesh/$jobId': typeof ApiMeshJobIdRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/about'
+    | '/api/address-import'
     | '/api/upload'
     | '/api/companion/$jobId'
     | '/api/mesh/$jobId'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
+    | '/api/address-import'
     | '/api/upload'
     | '/api/companion/$jobId'
     | '/api/mesh/$jobId'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/about'
+    | '/api/address-import'
     | '/api/upload'
     | '/api/companion/$jobId'
     | '/api/mesh/$jobId'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  ApiAddressImportRoute: typeof ApiAddressImportRoute
   ApiUploadRoute: typeof ApiUploadRoute
   ApiCompanionJobIdRoute: typeof ApiCompanionJobIdRoute
   ApiMeshJobIdRoute: typeof ApiMeshJobIdRoute
@@ -142,6 +155,13 @@ declare module '@tanstack/react-router' {
       path: '/api/upload'
       fullPath: '/api/upload'
       preLoaderRoute: typeof ApiUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/address-import': {
+      id: '/api/address-import'
+      path: '/api/address-import'
+      fullPath: '/api/address-import'
+      preLoaderRoute: typeof ApiAddressImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/stream/$jobId': {
@@ -178,6 +198,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  ApiAddressImportRoute: ApiAddressImportRoute,
   ApiUploadRoute: ApiUploadRoute,
   ApiCompanionJobIdRoute: ApiCompanionJobIdRoute,
   ApiMeshJobIdRoute: ApiMeshJobIdRoute,
