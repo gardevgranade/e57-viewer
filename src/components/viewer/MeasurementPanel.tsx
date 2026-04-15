@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useViewer } from '../../lib/viewerState.js'
-import type { SavedMeasurement } from '../../lib/viewerState.js'
+import type { SavedMeasurement, MeasurementGroup } from '../../lib/viewerState.js'
 import { useUnits } from '../../lib/units.js'
 
 function dist3(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) {
@@ -22,19 +22,49 @@ function polygonArea3D(pts: Array<{ x: number; y: number; z: number }>): number 
   return Math.sqrt(nx * nx + ny * ny + nz * nz) / 2
 }
 
+function measurePerimeter(m: SavedMeasurement): number {
+  const pts = m.points
+  if (pts.length < 2) return 0
+  let d = pts.slice(0, -1).reduce((s, p, i) => s + dist3(p, pts[i + 1]), 0)
+  if (m.isClosed && pts.length >= 3) d += dist3(pts[pts.length - 1], pts[0])
+  return d
+}
+
+function measureNetArea(m: SavedMeasurement, all: SavedMeasurement[]): number {
+  if (!m.isClosed || m.points.length < 3) return 0
+  const gross = polygonArea3D(m.points)
+  const cutouts = all
+    .filter(c => c.parentId === m.id && c.isClosed && c.points.length >= 3)
+    .reduce((s, c) => s + polygonArea3D(c.points), 0)
+  return gross - cutouts
+}
+
+function descendantGroupIds(groupId: string, groups: MeasurementGroup[]): Set<string> {
+  const ids = new Set<string>()
+  const queue = [groupId]
+  while (queue.length) {
+    const cur = queue.shift()!
+    ids.add(cur)
+    groups.filter(g => g.parentId === cur).forEach(g => queue.push(g.id))
+  }
+  return ids
+}
+
+function groupTotals(groupId: string, groups: MeasurementGroup[], measurements: SavedMeasurement[]): { area: number; perimeter: number; count: number } {
+  const ids = descendantGroupIds(groupId, groups)
+  const members = measurements.filter(m => m.groupId != null && ids.has(m.groupId) && !m.parentId)
+  return {
+    area: members.reduce((s, m) => s + measureNetArea(m, measurements), 0),
+    perimeter: members.reduce((s, m) => s + measurePerimeter(m), 0),
+    count: members.length,
+  }
+}
+
 // ── Single measurement row ───────────────────────────────────────────────────
 
 function MeasurementRow({
-  m,
-  onRename,
-  onDelete,
-  onToggleVisibility,
-  onHighlight,
-  onSetParent,
-  fmt,
-  fmtArea,
-  allMeasurements,
-  indent,
+  m, onRename, onDelete, onToggleVisibility, onHighlight, onSetParent, onSetGroup,
+  fmt, fmtArea, allMeasurements, allGroups, indent,
 }: {
   m: SavedMeasurement
   onRename: (id: string, label: string) => void
@@ -42,209 +72,213 @@ function MeasurementRow({
   onToggleVisibility: (id: string) => void
   onHighlight: (id: string | null, segIdx?: number | null) => void
   onSetParent: (id: string, parentId: string | null) => void
+  onSetGroup: (id: string, groupId: string | null) => void
   fmt: (v: number) => string
   fmtArea: (v: number) => string
   allMeasurements: SavedMeasurement[]
+  allGroups: MeasurementGroup[]
   indent?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
 
   const isCutout = !!m.parentId
   const pts = m.points
-  const segments = pts.slice(0, -1).map((p, i) => ({
-    idx: i,
-    length: dist3(p, pts[i + 1]),
-  }))
-  const closingLength = m.isClosed && pts.length >= 3
-    ? dist3(pts[pts.length - 1], pts[0])
-    : 0
+  const segments = pts.slice(0, -1).map((p, i) => ({ idx: i, length: dist3(p, pts[i + 1]) }))
+  const closingLength = m.isClosed && pts.length >= 3 ? dist3(pts[pts.length - 1], pts[0]) : 0
   const totalDist = segments.reduce((s, seg) => s + seg.length, 0) + closingLength
   const grossArea = m.isClosed ? polygonArea3D(pts) : 0
   const cutoutArea = m.isClosed
-    ? allMeasurements
-        .filter(c => c.parentId === m.id && c.isClosed && c.points.length >= 3)
-        .reduce((s, c) => s + polygonArea3D(c.points), 0)
+    ? allMeasurements.filter(c => c.parentId === m.id && c.isClosed && c.points.length >= 3).reduce((s, c) => s + polygonArea3D(c.points), 0)
     : 0
   const netArea = grossArea - cutoutArea
-  // Possible parents: other closed measurements that are not cutouts and not this one
-  const possibleParents = allMeasurements.filter(
-    p => p.id !== m.id && p.isClosed && p.points.length >= 3 && !p.parentId
-  )
+  const possibleParents = allMeasurements.filter(p => p.id !== m.id && p.isClosed && p.points.length >= 3 && !p.parentId)
 
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.03)',
-      borderRadius: 6,
-      overflow: 'hidden',
-      opacity: m.visible ? 1 : 0.45,
-      marginLeft: indent ? 12 : 0,
+      background: 'rgba(255,255,255,0.03)', borderRadius: 6, overflow: 'hidden',
+      opacity: m.visible ? 1 : 0.45, marginLeft: indent ? 12 : 0,
     }}>
-      {/* Header row */}
-      <div
-        style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          padding: '5px 6px',
-        }}
-        onMouseEnter={() => onHighlight(m.id)}
-        onMouseLeave={() => onHighlight(null)}
-      >
-        {/* Expand toggle */}
-        <button
-          onClick={() => setExpanded(v => !v)}
-          style={{
-            background: 'none', border: 'none', color: '#94a3b8',
-            cursor: 'pointer', fontSize: 9, padding: 0, flexShrink: 0,
-            width: 12, textAlign: 'center',
-          }}
-        >
-          {expanded ? '▼' : '▶'}
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 6px' }}
+        onMouseEnter={() => onHighlight(m.id)} onMouseLeave={() => onHighlight(null)}>
+        <button onClick={() => setExpanded(v => !v)} style={{
+          background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 9, padding: 0, flexShrink: 0, width: 12, textAlign: 'center',
+        }}>{expanded ? '▼' : '▶'}</button>
 
-        {/* Visibility toggle */}
-        <button
-          onClick={() => onToggleVisibility(m.id)}
-          title={m.visible ? 'Hide measurement' : 'Show measurement'}
-          style={{
-            background: 'none', border: 'none',
-            color: m.visible ? '#94a3b8' : '#475569',
-            cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1, flexShrink: 0,
-          }}
-        >
-          {m.visible ? '👁' : '👁‍🗨'}
-        </button>
+        <button onClick={() => onToggleVisibility(m.id)} title={m.visible ? 'Hide' : 'Show'} style={{
+          background: 'none', border: 'none', color: m.visible ? '#94a3b8' : '#475569',
+          cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1, flexShrink: 0,
+        }}>{m.visible ? '👁' : '👁‍🗨'}</button>
 
-        {/* Color indicator */}
         <div style={{
           width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
           background: isCutout ? '#ef4444' : m.isClosed ? '#4ade80' : '#f97316',
         }} />
 
-        {/* Cutout prefix */}
         {isCutout && <span style={{ color: '#ef4444', fontSize: 9, flexShrink: 0 }}>↳</span>}
 
-        {/* Editable label */}
-        <input
-          value={m.label}
-          onChange={e => onRename(m.id, e.target.value)}
-          style={{
-            flex: 1, background: 'transparent', border: 'none',
-            color: '#e2e8f0', fontSize: 11, fontWeight: 500,
-            outline: 'none', minWidth: 0,
-          }}
-        />
+        <input value={m.label} onChange={e => onRename(m.id, e.target.value)} style={{
+          flex: 1, background: 'transparent', border: 'none', color: '#e2e8f0', fontSize: 11, fontWeight: 500, outline: 'none', minWidth: 0,
+        }} />
 
-        {/* Total length */}
-        <span style={{ color: '#94a3b8', fontSize: 10, flexShrink: 0, fontFamily: 'monospace' }}>
-          {fmt(totalDist)}
-        </span>
+        <span style={{ color: '#94a3b8', fontSize: 10, flexShrink: 0, fontFamily: 'monospace' }}>{fmt(totalDist)}</span>
 
-        {/* Delete */}
-        <button
-          onClick={() => onDelete(m.id)}
-          title="Delete measurement"
-          style={{
-            background: 'none', border: 'none', color: '#475569',
-            cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1, flexShrink: 0,
-          }}
-        >
-          🗑
-        </button>
+        <button onClick={() => onDelete(m.id)} title="Delete" style={{
+          background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1, flexShrink: 0,
+        }}>🗑</button>
       </div>
 
-      {/* Area badge */}
       {m.isClosed && grossArea > 0 && !isCutout && (
-        <div style={{
-          padding: '0 6px 4px 25px',
-          fontSize: 10, fontFamily: 'monospace', fontWeight: 600, lineHeight: 1.5,
-        }}>
+        <div style={{ padding: '0 6px 4px 25px', fontSize: 10, fontFamily: 'monospace', fontWeight: 600, lineHeight: 1.5 }}>
           <span style={{ color: '#4ade80' }}>⬡ {fmtArea(netArea)}</span>
-          {cutoutArea > 0 && (
-            <span style={{ color: '#64748b', marginLeft: 6 }}>
-              ({fmtArea(grossArea)} − {fmtArea(cutoutArea)})
-            </span>
-          )}
+          {cutoutArea > 0 && <span style={{ color: '#64748b', marginLeft: 6 }}>({fmtArea(grossArea)} − {fmtArea(cutoutArea)})</span>}
         </div>
       )}
       {m.isClosed && grossArea > 0 && isCutout && (
-        <div style={{
-          padding: '0 6px 4px 25px',
-          fontSize: 10, color: '#ef4444', fontFamily: 'monospace', fontWeight: 600,
-        }}>
-          − {fmtArea(grossArea)}
-        </div>
+        <div style={{ padding: '0 6px 4px 25px', fontSize: 10, color: '#ef4444', fontFamily: 'monospace', fontWeight: 600 }}>− {fmtArea(grossArea)}</div>
       )}
 
-      {/* Expanded: segment details */}
       {expanded && (
-        <div style={{
-          borderTop: '1px solid rgba(255,255,255,0.05)',
-          padding: '4px 6px 4px 25px',
-          display: 'flex', flexDirection: 'column', gap: 2,
-        }}>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', padding: '4px 6px 4px 25px', display: 'flex', flexDirection: 'column', gap: 2 }}>
           {segments.map((seg, i) => (
-            <div
-              key={i}
-              style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                fontSize: 10, color: '#64748b', padding: '1px 0', borderRadius: 3,
-                cursor: 'default',
-              }}
-              onMouseEnter={() => onHighlight(m.id, i)}
-              onMouseLeave={() => onHighlight(null)}
-            >
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748b', padding: '1px 0', cursor: 'default' }}
+              onMouseEnter={() => onHighlight(m.id, i)} onMouseLeave={() => onHighlight(null)}>
               <span>Segment {i + 1}</span>
-              <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>
-                {fmt(seg.length)}
-              </span>
+              <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{fmt(seg.length)}</span>
             </div>
           ))}
           {m.isClosed && closingLength > 0 && (
-            <div
-              style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                fontSize: 10, color: '#64748b', padding: '1px 0', borderRadius: 3,
-                cursor: 'default',
-              }}
-              onMouseEnter={() => onHighlight(m.id, segments.length)}
-              onMouseLeave={() => onHighlight(null)}
-            >
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748b', padding: '1px 0', cursor: 'default' }}
+              onMouseEnter={() => onHighlight(m.id, segments.length)} onMouseLeave={() => onHighlight(null)}>
               <span>Closing</span>
-              <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>
-                {fmt(closingLength)}
-              </span>
+              <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{fmt(closingLength)}</span>
             </div>
           )}
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            fontSize: 10, fontWeight: 700, color: '#e2e8f0',
-            borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 3, marginTop: 1,
-          }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 700, color: '#e2e8f0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 3, marginTop: 1 }}>
             <span>Total</span>
             <span style={{ fontFamily: 'monospace' }}>{fmt(totalDist)}</span>
           </div>
 
-          {/* Parent assignment dropdown for closed measurements */}
-          {m.isClosed && m.points.length >= 3 && (
-            <div style={{
-              borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 4, marginTop: 3,
-              display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#64748b',
-            }}>
-              <span style={{ flexShrink: 0 }}>Parent:</span>
-              <select
-                value={m.parentId ?? ''}
-                onChange={e => onSetParent(m.id, e.target.value || null)}
-                style={{
-                  flex: 1, background: '#1e293b', border: '1px solid #334155',
-                  borderRadius: 3, color: '#94a3b8', fontSize: 9, padding: '1px 2px',
-                  outline: 'none', cursor: 'pointer',
-                }}
-              >
-                <option value="">None (standalone)</option>
-                {possibleParents.map(p => (
-                  <option key={p.id} value={p.id}>{p.label}</option>
-                ))}
+          {/* Group assignment */}
+          {allGroups.length > 0 && (
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 4, marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#64748b' }}>
+              <span style={{ flexShrink: 0 }}>Group:</span>
+              <select value={m.groupId ?? ''} onChange={e => onSetGroup(m.id, e.target.value || null)} style={{
+                flex: 1, background: '#1e293b', border: '1px solid #334155', borderRadius: 3, color: '#94a3b8', fontSize: 9, padding: '1px 2px', outline: 'none', cursor: 'pointer',
+              }}>
+                <option value="">Ungrouped</option>
+                {allGroups.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
               </select>
             </div>
+          )}
+
+          {/* Cutout assignment */}
+          {m.isClosed && m.points.length >= 3 && (
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 4, marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#64748b' }}>
+              <span style={{ flexShrink: 0 }}>Cutout of:</span>
+              <select value={m.parentId ?? ''} onChange={e => onSetParent(m.id, e.target.value || null)} style={{
+                flex: 1, background: '#1e293b', border: '1px solid #334155', borderRadius: 3, color: '#94a3b8', fontSize: 9, padding: '1px 2px', outline: 'none', cursor: 'pointer',
+              }}>
+                <option value="">None</option>
+                {possibleParents.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Group section ────────────────────────────────────────────────────────────
+
+function MeasurementGroupSection({
+  group, allGroups, allMeasurements, depth,
+  onRenameGroup, onDeleteGroup, onAddSubGroup,
+  onRename, onDelete, onToggleVisibility, onHighlight, onSetParent, onSetGroup, fmt, fmtArea,
+}: {
+  group: MeasurementGroup
+  allGroups: MeasurementGroup[]
+  allMeasurements: SavedMeasurement[]
+  depth: number
+  onRenameGroup: (id: string, patch: Partial<Pick<MeasurementGroup, 'label'>>) => void
+  onDeleteGroup: (id: string) => void
+  onAddSubGroup: (parentId: string) => void
+  onRename: (id: string, label: string) => void
+  onDelete: (id: string) => void
+  onToggleVisibility: (id: string) => void
+  onHighlight: (id: string | null, segIdx?: number | null) => void
+  onSetParent: (id: string, parentId: string | null) => void
+  onSetGroup: (id: string, groupId: string | null) => void
+  fmt: (v: number) => string
+  fmtArea: (v: number) => string
+}) {
+  const [expanded, setExpanded] = useState(true)
+  const { area, perimeter, count } = groupTotals(group.id, allGroups, allMeasurements)
+  const childGroups = allGroups.filter(g => g.parentId === group.id)
+  const directMeasurements = allMeasurements.filter(m => m.groupId === group.id && !m.parentId)
+
+  const orderedRows: { m: SavedMeasurement; indent: boolean }[] = []
+  for (const m of directMeasurements) {
+    orderedRows.push({ m, indent: false })
+    for (const c of allMeasurements.filter(c => c.parentId === m.id)) {
+      orderedRows.push({ m: c, indent: true })
+    }
+  }
+
+  return (
+    <div style={{ marginLeft: depth > 0 ? 10 : 0, marginBottom: 3 }}>
+      {/* Group header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 4, padding: '4px 6px',
+        background: 'rgba(255,255,255,0.04)', borderRadius: 5,
+      }}>
+        <button onClick={() => setExpanded(v => !v)} style={{
+          background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 9, padding: 0, flexShrink: 0, width: 12, textAlign: 'center',
+        }}>{expanded ? '▼' : '▶'}</button>
+
+        <span style={{ color: '#7dd3fc', fontSize: 9, flexShrink: 0 }}>📁</span>
+
+        <input value={group.label} onChange={e => onRenameGroup(group.id, { label: e.target.value })} style={{
+          flex: 1, background: 'transparent', border: 'none', color: '#e2e8f0', fontSize: 11, fontWeight: 600, outline: 'none', minWidth: 0,
+        }} />
+
+        {count > 0 && (
+          <span style={{ color: '#64748b', fontSize: 9, fontFamily: 'monospace', flexShrink: 0 }}>
+            {fmt(perimeter)}
+          </span>
+        )}
+
+        <button onClick={() => onAddSubGroup(group.id)} title="Add sub-group" style={{
+          background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1, flexShrink: 0,
+        }}>+</button>
+
+        <button onClick={() => onDeleteGroup(group.id)} title="Delete group" style={{
+          background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1, flexShrink: 0,
+        }}>🗑</button>
+      </div>
+
+      {expanded && area > 0 && (
+        <div style={{ padding: '0 6px 3px 28px', fontSize: 9, fontFamily: 'monospace', color: '#4ade80', fontWeight: 600 }}>
+          Σ {fmtArea(area)}
+        </div>
+      )}
+
+      {expanded && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
+          {childGroups.map(cg => (
+            <MeasurementGroupSection key={cg.id} group={cg} allGroups={allGroups} allMeasurements={allMeasurements} depth={depth + 1}
+              onRenameGroup={onRenameGroup} onDeleteGroup={onDeleteGroup} onAddSubGroup={onAddSubGroup}
+              onRename={onRename} onDelete={onDelete} onToggleVisibility={onToggleVisibility}
+              onHighlight={onHighlight} onSetParent={onSetParent} onSetGroup={onSetGroup} fmt={fmt} fmtArea={fmtArea} />
+          ))}
+          {orderedRows.map(({ m, indent }) => (
+            <MeasurementRow key={m.id} m={m} onRename={onRename} onDelete={onDelete}
+              onToggleVisibility={onToggleVisibility} onHighlight={onHighlight}
+              onSetParent={onSetParent} onSetGroup={onSetGroup} fmt={fmt} fmtArea={fmtArea}
+              allMeasurements={allMeasurements} allGroups={allGroups} indent={indent} />
+          ))}
+          {orderedRows.length === 0 && childGroups.length === 0 && (
+            <div style={{ color: '#475569', fontSize: 9, padding: '2px 28px' }}>Empty group</div>
           )}
         </div>
       )}
@@ -258,58 +292,58 @@ export default function MeasurementPanel() {
   const {
     savedMeasurements, removeMeasurement, updateMeasurementLabel, clearAllMeasurements,
     toggleMeasurementVisibility, setHighlightedMeasurement,
-    measureActive, setMeasureActive, setMeasurementParent,
+    measureActive, setMeasureActive, setMeasurementParent, setMeasurementGroup,
+    measurementGroups, addMeasurementGroup, removeMeasurementGroup, updateMeasurementGroup,
   } = useViewer()
   const { fmtLength, fmtArea } = useUnits()
   const [open, setOpen] = useState(true)
 
-  if (savedMeasurements.length === 0 && !measureActive) return null
+  if (savedMeasurements.length === 0 && measurementGroups.length === 0 && !measureActive) return null
 
-  // Organize: top-level measurements first, then cutouts right after their parent
-  const topLevel = savedMeasurements.filter(m => !m.parentId)
-  const orderedRows: { m: SavedMeasurement; indent: boolean }[] = []
-  for (const m of topLevel) {
-    orderedRows.push({ m, indent: false })
-    const cutouts = savedMeasurements.filter(c => c.parentId === m.id)
-    for (const c of cutouts) {
-      orderedRows.push({ m: c, indent: true })
+  const handleAddGroup = (parentId: string | null = null) => {
+    addMeasurementGroup({
+      id: `mgrp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      label: `Group ${measurementGroups.length + 1}`,
+      parentId,
+    })
+  }
+
+  const topGroups = measurementGroups.filter(g => !g.parentId)
+
+  // Ungrouped measurements
+  const ungrouped = savedMeasurements.filter(m => !m.groupId && !m.parentId)
+  const ungroupedRows: { m: SavedMeasurement; indent: boolean }[] = []
+  for (const m of ungrouped) {
+    ungroupedRows.push({ m, indent: false })
+    for (const c of savedMeasurements.filter(c => c.parentId === m.id)) {
+      ungroupedRows.push({ m: c, indent: true })
     }
   }
-  // Also include orphaned cutouts (parent deleted)
-  const usedIds = new Set(orderedRows.map(r => r.m.id))
+  // Orphaned cutouts
+  const usedIds = new Set(ungroupedRows.map(r => r.m.id))
   for (const m of savedMeasurements) {
-    if (!usedIds.has(m.id)) {
-      orderedRows.push({ m, indent: false })
+    if (!m.groupId && m.parentId && !usedIds.has(m.id)) {
+      ungroupedRows.push({ m, indent: false })
     }
   }
 
   return (
     <div style={{
       position: 'absolute', bottom: 12, left: 12, zIndex: 10,
-      background: 'rgba(13,17,23,0.90)',
-      border: '1px solid rgba(255,255,255,0.08)',
-      borderRadius: 10,
-      minWidth: 240, maxWidth: 280,
-      maxHeight: 'calc(100vh - 100px)',
-      display: 'flex', flexDirection: 'column',
-      backdropFilter: 'blur(8px)',
-      fontFamily: 'system-ui, sans-serif', fontSize: 12, color: '#e2e8f0',
+      background: 'rgba(13,17,23,0.90)', border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: 10, minWidth: 240, maxWidth: 300,
+      maxHeight: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column',
+      backdropFilter: 'blur(8px)', fontFamily: 'system-ui, sans-serif', fontSize: 12, color: '#e2e8f0',
     }}>
-      {/* Header */}
       <div style={{ padding: '10px 12px 0', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: open ? 8 : 10 }}>
           <span style={{ fontWeight: 700, fontSize: 13 }}>
             📏 Measurements
             {savedMeasurements.length > 0 && (
-              <span style={{ color: '#64748b', fontWeight: 400, fontSize: 11, marginLeft: 6 }}>
-                {savedMeasurements.length}
-              </span>
+              <span style={{ color: '#64748b', fontWeight: 400, fontSize: 11, marginLeft: 6 }}>{savedMeasurements.length}</span>
             )}
           </span>
-          <button
-            onClick={() => setOpen(o => !o)}
-            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
-          >
+          <button onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>
             {open ? '▲' : '▼'}
           </button>
         </div>
@@ -317,74 +351,62 @@ export default function MeasurementPanel() {
 
       {open && (
         <div style={{ overflowY: 'auto', padding: '0 12px 10px', flex: 1, minHeight: 0 }}>
-          {/* Measurement list */}
-          {savedMeasurements.length > 0 && (
+          {/* Groups */}
+          {topGroups.map(g => (
+            <MeasurementGroupSection key={g.id} group={g} allGroups={measurementGroups} allMeasurements={savedMeasurements} depth={0}
+              onRenameGroup={updateMeasurementGroup} onDeleteGroup={removeMeasurementGroup} onAddSubGroup={handleAddGroup}
+              onRename={updateMeasurementLabel} onDelete={removeMeasurement}
+              onToggleVisibility={toggleMeasurementVisibility}
+              onHighlight={(id, segIdx) => setHighlightedMeasurement(id, segIdx ?? null)}
+              onSetParent={setMeasurementParent} onSetGroup={setMeasurementGroup}
+              fmt={fmtLength} fmtArea={fmtArea} />
+          ))}
+
+          {/* Ungrouped */}
+          {ungroupedRows.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
-              {orderedRows.map(({ m, indent }) => (
-                <MeasurementRow
-                  key={m.id}
-                  m={m}
-                  onRename={updateMeasurementLabel}
-                  onDelete={removeMeasurement}
+              {topGroups.length > 0 && (
+                <div style={{ color: '#475569', fontSize: 9, padding: '4px 0 2px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Ungrouped
+                </div>
+              )}
+              {ungroupedRows.map(({ m, indent }) => (
+                <MeasurementRow key={m.id} m={m} onRename={updateMeasurementLabel} onDelete={removeMeasurement}
                   onToggleVisibility={toggleMeasurementVisibility}
                   onHighlight={(id, segIdx) => setHighlightedMeasurement(id, segIdx ?? null)}
-                  onSetParent={setMeasurementParent}
-                  fmt={fmtLength}
-                  fmtArea={fmtArea}
-                  allMeasurements={savedMeasurements}
-                  indent={indent}
-                />
+                  onSetParent={setMeasurementParent} onSetGroup={setMeasurementGroup}
+                  fmt={fmtLength} fmtArea={fmtArea}
+                  allMeasurements={savedMeasurements} allGroups={measurementGroups} indent={indent} />
               ))}
             </div>
           )}
 
-          {savedMeasurements.length === 0 && (
-            <div style={{ color: '#475569', fontSize: 11, textAlign: 'center', padding: '8px 0' }}>
-              No measurements yet
-            </div>
+          {savedMeasurements.length === 0 && measurementGroups.length === 0 && (
+            <div style={{ color: '#475569', fontSize: 11, textAlign: 'center', padding: '8px 0' }}>No measurements yet</div>
           )}
 
           {/* Bottom actions */}
-          <div style={{ display: 'flex', gap: 5 }}>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
             {measureActive ? (
-              <button
-                onClick={() => setMeasureActive(false)}
-                style={{
-                  flex: 1, padding: '5px 0',
-                  background: '#16a34a',
-                  border: '1px solid #22c55e',
-                  borderRadius: 5, color: '#fff',
-                  fontWeight: 600, cursor: 'pointer', fontSize: 11,
-                }}
-              >
-                ✓ Finish Measurement
-              </button>
+              <button onClick={() => setMeasureActive(false)} style={{
+                flex: 1, padding: '5px 0', background: '#16a34a', border: '1px solid #22c55e',
+                borderRadius: 5, color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 11,
+              }}>✓ Finish</button>
             ) : (
-              <button
-                onClick={() => setMeasureActive(true)}
-                style={{
-                  flex: 1, padding: '5px 0',
-                  background: '#1e293b',
-                  border: '1px solid #334155',
-                  borderRadius: 5, color: '#94a3b8',
-                  fontWeight: 600, cursor: 'pointer', fontSize: 11,
-                }}
-              >
-                + New
-              </button>
+              <button onClick={() => setMeasureActive(true)} style={{
+                flex: 1, padding: '5px 0', background: '#1e293b', border: '1px solid #334155',
+                borderRadius: 5, color: '#94a3b8', fontWeight: 600, cursor: 'pointer', fontSize: 11,
+              }}>+ New</button>
             )}
-            {savedMeasurements.length > 0 && (
-              <button
-                onClick={clearAllMeasurements}
-                style={{
-                  padding: '5px 10px',
-                  background: '#1e293b', border: '1px solid #334155',
-                  borderRadius: 5, color: '#94a3b8',
-                  fontWeight: 600, cursor: 'pointer', fontSize: 11,
-                }}
-              >
-                Clear All
-              </button>
+            <button onClick={() => handleAddGroup(null)} style={{
+              padding: '5px 10px', background: '#1e293b', border: '1px solid #334155',
+              borderRadius: 5, color: '#7dd3fc', fontWeight: 600, cursor: 'pointer', fontSize: 11,
+            }}>+ Group</button>
+            {(savedMeasurements.length > 0 || measurementGroups.length > 0) && (
+              <button onClick={clearAllMeasurements} style={{
+                padding: '5px 10px', background: '#1e293b', border: '1px solid #334155',
+                borderRadius: 5, color: '#94a3b8', fontWeight: 600, cursor: 'pointer', fontSize: 11,
+              }}>Clear All</button>
             )}
           </div>
         </div>
