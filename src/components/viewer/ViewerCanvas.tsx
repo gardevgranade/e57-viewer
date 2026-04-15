@@ -31,6 +31,7 @@ import FPSMonitor, { useFPSCallback } from './FPSMonitor.js'
 import DragDropZone from './DragDropZone.js'
 import WelcomeScreen from './WelcomeScreen.js'
 import MeasureHintBar from './MeasureHintBar.js'
+import MeasurementPanel from './MeasurementPanel.js'
 import OrthoViewport, { type OrthoDirection } from './OrthoViewport.js'
 
 function SceneGrid() {
@@ -296,6 +297,7 @@ export default function ViewerCanvas() {
 
             {/* Viewport overlays */}
             <SurfacePanel />
+            <MeasurementPanel />
             <SurfaceTooltip />
             <LassoOverlay />
             <ModelContextCard />

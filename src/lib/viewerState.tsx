@@ -28,6 +28,7 @@ export interface SurfaceGroup {
 
 export interface SavedMeasurement {
   id: string
+  label: string
   points: Array<{ x: number; y: number; z: number }>
   isClosed: boolean
 }
@@ -145,6 +146,8 @@ export interface ViewerActions {
   updateSurfaceGeometry: (id: string, worldTriangles: Float32Array) => void
   addMeasurement: (m: SavedMeasurement) => void
   removeMeasurement: (id: string) => void
+  updateMeasurementLabel: (id: string, label: string) => void
+  clearAllMeasurements: () => void
   updateMeasurement: (id: string, points: Array<{ x: number; y: number; z: number }>, isClosed: boolean) => void
   setBoxSelectMode: (v: boolean) => void
   incrementModelVersion: () => void
@@ -421,6 +424,15 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
         setState(s => ({ ...s, savedMeasurements: [...s.savedMeasurements, m] })),
       removeMeasurement: (id) =>
         setState(s => ({ ...s, savedMeasurements: s.savedMeasurements.filter(m => m.id !== id) })),
+      updateMeasurementLabel: (id, label) =>
+        setState(s => ({
+          ...s,
+          savedMeasurements: s.savedMeasurements.map(m =>
+            m.id === id ? { ...m, label } : m,
+          ),
+        })),
+      clearAllMeasurements: () =>
+        setState(s => ({ ...s, savedMeasurements: [] })),
       updateMeasurement: (id, points, isClosed) =>
         setState(s => ({
           ...s,
