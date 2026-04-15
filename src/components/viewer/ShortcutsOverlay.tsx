@@ -35,8 +35,9 @@ const SHORTCUTS: ShortcutGroup[] = [
       { keys: 'Right drag', desc: 'Pan' },
       { keys: 'Scroll', desc: 'Zoom' },
       { keys: 'W/A/S/D', desc: 'Fly forward/left/back/right' },
-      { keys: 'Q / Space', desc: 'Fly up' },
-      { keys: 'E / Shift', desc: 'Fly down' },
+      { keys: 'Q', desc: 'Fly up' },
+      { keys: 'E', desc: 'Fly down' },
+      { keys: 'Shift + drag', desc: 'Pan' },
     ],
   },
   {

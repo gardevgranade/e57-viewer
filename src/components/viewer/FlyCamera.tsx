@@ -20,7 +20,8 @@ export interface FlyCameraHandle {
  *   Scroll      — zoom in / out along view direction
  *   W/S         — fly forward / backward
  *   A/D         — strafe left / right
- *   Q/Space     — rise,  E/Shift — descend
+ *   Q — rise,  E — descend
+ *   Shift+drag  — pan (same as right-drag)
  */
 const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
   const { camera, gl } = useThree()
@@ -86,7 +87,8 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
     const onMouseDown = (e: MouseEvent) => {
       // In measure mode left-click is handled by MeasureTool, not orbit
       if (e.button === 0 && measureMode.current) return
-      if (e.button === 0) drag.current = 'orbit'
+      if (e.button === 0 && e.shiftKey) drag.current = 'pan'
+      else if (e.button === 0) drag.current = 'orbit'
       if (e.button === 2) drag.current = 'pan'
       lastMouse.current = { x: e.clientX, y: e.clientY }
       flyAnim.current = null
@@ -177,8 +179,8 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
     if (k.has('KeyS') || k.has('ArrowDown')) camera.position.addScaledVector(forward, -speed)
     if (k.has('KeyA') || k.has('ArrowLeft')) camera.position.addScaledVector(right, -speed)
     if (k.has('KeyD') || k.has('ArrowRight')) camera.position.addScaledVector(right, speed)
-    if (k.has('KeyQ') || k.has('Space')) camera.position.y += speed
-    if (k.has('KeyE') || k.has('ShiftLeft')) camera.position.y -= speed
+    if (k.has('KeyQ')) camera.position.y += speed
+    if (k.has('KeyE')) camera.position.y -= speed
   })
 
   return null
