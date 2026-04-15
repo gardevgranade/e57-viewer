@@ -267,18 +267,33 @@ export default function MeasurementPanel() {
 
           {/* Bottom actions */}
           <div style={{ display: 'flex', gap: 5 }}>
-            <button
-              onClick={() => setMeasureActive(true)}
-              style={{
-                flex: 1, padding: '5px 0',
-                background: measureActive ? '#4c1d95' : '#1e293b',
-                border: `1px solid ${measureActive ? '#7c3aed' : '#334155'}`,
-                borderRadius: 5, color: measureActive ? '#ddd6fe' : '#94a3b8',
-                fontWeight: 600, cursor: 'pointer', fontSize: 11,
-              }}
-            >
-              {measureActive ? '📏 Measuring…' : '+ New'}
-            </button>
+            {measureActive ? (
+              <button
+                onClick={() => setMeasureActive(false)}
+                style={{
+                  flex: 1, padding: '5px 0',
+                  background: '#16a34a',
+                  border: '1px solid #22c55e',
+                  borderRadius: 5, color: '#fff',
+                  fontWeight: 600, cursor: 'pointer', fontSize: 11,
+                }}
+              >
+                ✓ Finish Measurement
+              </button>
+            ) : (
+              <button
+                onClick={() => setMeasureActive(true)}
+                style={{
+                  flex: 1, padding: '5px 0',
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  borderRadius: 5, color: '#94a3b8',
+                  fontWeight: 600, cursor: 'pointer', fontSize: 11,
+                }}
+              >
+                + New
+              </button>
+            )}
             {savedMeasurements.length > 0 && (
               <button
                 onClick={clearAllMeasurements}

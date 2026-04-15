@@ -775,6 +775,30 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
           </Html>
         )
       })()}
+
+      {/* Finish button near last point */}
+      {points.length >= 2 && measureActive && (() => {
+        const last = points[points.length - 1]
+        return (
+          <Html position={[last.x, last.y - dotRadius * 4, last.z]} center occlude={false}>
+            <button
+              onClick={(e) => { e.stopPropagation(); saveActive() }}
+              style={{
+                background: '#16a34a', color: '#fff',
+                border: 'none', borderRadius: 5, padding: '3px 10px',
+                fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                fontFamily: 'system-ui, sans-serif',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#22c55e' }}
+              onMouseLeave={(e) => { (e.target as HTMLElement).style.background = '#16a34a' }}
+            >
+              ✓ Finish
+            </button>
+          </Html>
+        )
+      })()}
     </>
   )
 }
