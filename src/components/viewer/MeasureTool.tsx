@@ -464,20 +464,19 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
         const p = pts[i], q = pts[i + 1]
         const [mx, my, mz] = mid3(p, q)
         const btnStyle: React.CSSProperties = {
-          display: 'block', width: '100%', padding: '6px 14px',
+          display: 'block', width: '100%', padding: '3px 8px',
           background: 'none', border: 'none',
-          cursor: 'pointer', textAlign: 'left', fontSize: 12,
+          cursor: 'pointer', textAlign: 'left', fontSize: 10,
         }
         return (
-          <Html position={[mx, my + dotRadius * 3, mz]} center occlude={false}>
+          <Html position={[mx, my + dotRadius * 10, mz]} center occlude={false}>
             <div style={{
               background: 'rgba(15,15,25,0.95)', border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 8, padding: '4px 0', minWidth: 140, fontFamily: 'system-ui',
-              fontSize: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+              borderRadius: 6, padding: '2px 0', minWidth: 100, fontFamily: 'system-ui',
+              fontSize: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
             }}>
               <button
                 onClick={() => {
-                  // Insert a new point at the midpoint of this segment
                   const newPt = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, z: (p.z + q.z) / 2 }
                   const newPts = [...m.points]
                   newPts.splice(i + 1, 0, newPt)
@@ -488,7 +487,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
                 onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(96,165,250,0.15)' }}
                 onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none' }}
               >
-                ＋ Add point here
+                ＋ Add point
               </button>
               <button
                 onClick={() => { onDelete(m.id); setShowMenu(null) }}
@@ -496,32 +495,31 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
                 onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(239,68,68,0.15)' }}
                 onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none' }}
               >
-                🗑 Delete measurement
+                🗑 Delete
               </button>
             </div>
           </Html>
         )
       })()}
 
-      {/* Context menu on point click — add point / delete point / delete measurement */}
+      {/* Context menu on point click */}
       {showMenu?.type === 'point' && (() => {
         const i = showMenu.ptIdx
         const p = pts[i]
         const canDeletePt = pts.length > 2
-        // Insert after this point (or before first point on closed shapes)
         const hasNextSeg = i < pts.length - 1 || m.isClosed
         const hasPrevSeg = i > 0 || m.isClosed
         const btnStyle: React.CSSProperties = {
-          display: 'block', width: '100%', padding: '6px 14px',
+          display: 'block', width: '100%', padding: '3px 8px',
           background: 'none', border: 'none',
-          cursor: 'pointer', textAlign: 'left', fontSize: 12,
+          cursor: 'pointer', textAlign: 'left', fontSize: 10,
         }
         return (
-          <Html position={[p.x, p.y + dotRadius * 3, p.z]} center occlude={false}>
+          <Html position={[p.x, p.y + dotRadius * 10, p.z]} center occlude={false}>
             <div style={{
               background: 'rgba(15,15,25,0.95)', border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 8, padding: '4px 0', minWidth: 140, fontFamily: 'system-ui',
-              fontSize: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+              borderRadius: 6, padding: '2px 0', minWidth: 100, fontFamily: 'system-ui',
+              fontSize: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
             }}>
               {hasNextSeg && (() => {
                 const nextIdx = (i + 1) % pts.length
@@ -539,7 +537,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
                     onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(96,165,250,0.15)' }}
                     onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none' }}
                   >
-                    ＋ Add point after
+                    ＋ Add after
                   </button>
                 )
               })()}
@@ -559,7 +557,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
                     onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(96,165,250,0.15)' }}
                     onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none' }}
                   >
-                    ＋ Add point before
+                    ＋ Add before
                   </button>
                 )
               })()}
@@ -575,7 +573,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
                   onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(239,68,68,0.15)' }}
                   onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none' }}
                 >
-                  ✕ Delete point
+                  ✕ Remove point
                 </button>
               )}
               <button
@@ -584,7 +582,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
                 onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(239,68,68,0.15)' }}
                 onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none' }}
               >
-                🗑 Delete measurement
+                🗑 Delete
               </button>
             </div>
           </Html>
