@@ -430,47 +430,33 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
         )
       })}
 
-      {/* Segment distance labels on hover — show all adjacent segments */}
+      {/* Combined hover tooltip: segment distances + total/area */}
       {typeof hovered === 'number' && (() => {
-        const segs: [number, number][] = []
-        // segment before hovered point
-        if (hovered > 0) segs.push([hovered - 1, hovered])
-        else if (m.isClosed && pts.length >= 3) segs.push([pts.length - 1, 0])
-        // segment after hovered point
-        if (hovered < pts.length - 1) segs.push([hovered, hovered + 1])
-        else if (m.isClosed && pts.length >= 3) segs.push([hovered, 0])
-        return segs.map(([a, b]) => {
-          const p = pts[a], q = pts[b]
-          const d = dist3(p, q)
-          const [mx, my, mz] = mid3(p, q)
-          return (
-            <Html key={`seg-${a}-${b}`} position={[mx, my + dotRadius * 2, mz]} center occlude={false}>
-              <div style={{
-                background: 'rgba(0,0,0,0.82)', color: '#f97316',
-                padding: '4px 9px', borderRadius: 6, fontSize: 12,
-                fontFamily: 'monospace', whiteSpace: 'nowrap',
-                pointerEvents: 'none', border: '1px solid rgba(249,115,22,0.5)',
-              }}>
-                {fmt(d)}
-              </div>
-            </Html>
-          )
-        })
-      })()}
-
-      {/* Total / area label on point hover */}
-      {typeof hovered === 'number' && pts.length >= 2 && (() => {
         const p = pts[hovered]
+        const segs: { a: number; b: number }[] = []
+        if (hovered > 0) segs.push({ a: hovered - 1, b: hovered })
+        else if (m.isClosed && pts.length >= 3) segs.push({ a: pts.length - 1, b: 0 })
+        if (hovered < pts.length - 1) segs.push({ a: hovered, b: hovered + 1 })
+        else if (m.isClosed && pts.length >= 3) segs.push({ a: hovered, b: 0 })
+        const showTotal = pts.length >= 3
+        const showArea = m.isClosed && area > 0
+        if (segs.length === 0 && !showTotal && !showArea) return null
         return (
-          <Html position={[p.x, p.y + dotRadius * 12, p.z]} center occlude={false}>
+          <Html position={[p.x, p.y + dotRadius * 10, p.z]} center occlude={false}>
             <div style={{
               background: 'rgba(0,0,0,0.9)', color: '#fff',
-              padding: '5px 10px', borderRadius: 5, fontSize: 11,
+              padding: '4px 10px', borderRadius: 6, fontSize: 11,
               fontFamily: 'monospace', whiteSpace: 'nowrap',
-              pointerEvents: 'none', border: '1px solid rgba(255,255,255,0.2)', lineHeight: 1.6,
+              pointerEvents: 'none', border: '1px solid rgba(255,255,255,0.2)',
+              lineHeight: 1.7, textAlign: 'center',
             }}>
-              {pts.length >= 3 && <div>∑ {fmt(perimeter)}</div>}
-              {m.isClosed && area > 0 && <div style={{ color: '#4ade80', fontWeight: 700 }}>⬡ {fmtArea(area)}</div>}
+              {segs.map(({ a, b }) => (
+                <div key={`${a}-${b}`} style={{ color: '#f97316' }}>
+                  P{a + 1}→P{b + 1}: {fmt(dist3(pts[a], pts[b]))}
+                </div>
+              ))}
+              {showTotal && <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', marginTop: 2, paddingTop: 2 }}>∑ {fmt(perimeter)}</div>}
+              {showArea && <div style={{ color: '#4ade80', fontWeight: 700 }}>⬡ {fmtArea(area)}</div>}
             </div>
           </Html>
         )
