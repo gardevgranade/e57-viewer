@@ -236,12 +236,15 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null)
   const [dragPoints, setDragPoints] = useState<MeasurePoint[] | null>(null)
   const draggingIdxRef = useRef<number | null>(null)
+  const dragPointsRef = useRef<MeasurePoint[] | null>(null)
   const didMoveRef = useRef(false)
+  const justFinishedDragRef = useRef(false)
   const { camera, gl, scene } = useThree()
   const { bbox } = useViewer()
 
-  // Keep ref in sync
+  // Keep refs in sync
   draggingIdxRef.current = draggingIdx
+  dragPointsRef.current = dragPoints
 
   // Close context menu on click outside
   useEffect(() => {
@@ -291,10 +294,12 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
     }
 
     const onUp = () => {
+      const moved = didMoveRef.current
+      justFinishedDragRef.current = moved
       setDraggingIdx(null)
       flyCameraRef.current?.setMeasureMode(false)
-      if (didMoveRef.current && dragPoints) {
-        onUpdatePoints(m.id, dragPoints, m.isClosed)
+      if (moved && dragPointsRef.current) {
+        onUpdatePoints(m.id, dragPointsRef.current, m.isClosed)
       }
       setDragPoints(null)
     }
@@ -305,7 +310,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
       gl.domElement.removeEventListener('pointermove', onMove)
       gl.domElement.removeEventListener('pointerup', onUp)
     }
-  }, [draggingIdx, bbox, camera, gl, scene, m, dragPoints, onUpdatePoints, flyCameraRef, measureSnap, snapCandidates])
+  }, [draggingIdx, bbox, camera, gl, scene, m, onUpdatePoints, flyCameraRef, measureSnap, snapCandidates])
 
   if (!m.visible) return null
 
@@ -394,9 +399,12 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
             }}
             onClick={(e) => {
               e.stopPropagation()
-              if (didMoveRef.current) { didMoveRef.current = false; return }
+              if (didMoveRef.current || justFinishedDragRef.current) {
+                didMoveRef.current = false
+                justFinishedDragRef.current = false
+                return
+              }
               if (!measureActive) {
-                // Show point context menu when not measuring
                 setShowMenu({ type: 'point', ptIdx: i })
                 return
               }
