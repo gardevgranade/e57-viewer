@@ -216,23 +216,77 @@ function findSnap(
 
 // ── Saved measurement rendering ─────────────────────────────────────────────
 
-function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea, highlightedSegIdx }: {
+function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoints, fmt, fmtArea, highlightedSegIdx, measureActive, flyCameraRef }: {
   m: SavedMeasurement
   dotRadius: number
   onDelete: (id: string) => void
   onContinue: (id: string) => void
+  onUpdatePoints: (id: string, points: MeasurePoint[], isClosed: boolean) => void
   fmt: (v: number) => string
   fmtArea: (v: number) => string
   /** Segment index highlighted from the panel (null = none, -1 = whole measurement) */
   highlightedSegIdx: number | null
+  measureActive: boolean
+  flyCameraRef: React.RefObject<FlyCameraHandle | null>
 }) {
   const [hovered, setHovered] = useState<'line' | number | null>(null)
   const [showMenu, setShowMenu] = useState<{ segIdx: number } | null>(null)
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null)
+  const [dragPoints, setDragPoints] = useState<MeasurePoint[] | null>(null)
+  const draggingIdxRef = useRef<number | null>(null)
+  const didMoveRef = useRef(false)
+  const { camera, gl, scene } = useThree()
+  const { bbox } = useViewer()
+
+  // Keep ref in sync
+  draggingIdxRef.current = draggingIdx
+
+  // Drag handler for saved measurement points
+  useEffect(() => {
+    if (draggingIdx === null) return
+    const rc = makeRaycaster(bbox)
+    didMoveRef.current = false
+
+    const onMove = (e: PointerEvent) => {
+      const idx = draggingIdxRef.current
+      if (idx === null) return
+      didMoveRef.current = true
+      const rect = gl.domElement.getBoundingClientRect()
+      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1
+      rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
+      const hits = rc.intersectObjects(scene.children, true)
+        .filter(h => (h.object instanceof THREE.Points || h.object instanceof THREE.Mesh) && !h.object.userData?.isMeasurement)
+      if (hits.length > 0) {
+        const p = hits[0].point
+        setDragPoints(prev => {
+          const pts = prev ?? [...m.points]
+          return pts.map((pt, i) => i === idx ? { x: p.x, y: p.y, z: p.z } : pt)
+        })
+      }
+    }
+
+    const onUp = () => {
+      setDraggingIdx(null)
+      flyCameraRef.current?.setMeasureMode(false)
+      if (didMoveRef.current && dragPoints) {
+        onUpdatePoints(m.id, dragPoints, m.isClosed)
+      }
+      setDragPoints(null)
+    }
+
+    gl.domElement.addEventListener('pointermove', onMove)
+    gl.domElement.addEventListener('pointerup', onUp)
+    return () => {
+      gl.domElement.removeEventListener('pointermove', onMove)
+      gl.domElement.removeEventListener('pointerup', onUp)
+    }
+  }, [draggingIdx, bbox, camera, gl, scene, m, dragPoints, onUpdatePoints, flyCameraRef])
 
   if (!m.visible) return null
 
   const isWholeHighlighted = highlightedSegIdx === -1
-  const pts = m.points
+  const pts = dragPoints ?? m.points
 
   const totalDist = pts.length >= 2
     ? pts.slice(0, -1).reduce((s, p, i) => s + dist3(p, pts[i + 1]), 0)
@@ -291,10 +345,12 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea
         )
       })}
 
-      {/* Measurement dots (clickable to continue) */}
+      {/* Measurement dots (draggable to edit, click endpoint to continue) */}
       {pts.map((p, i) => {
         const isEnd = i === 0 || i === pts.length - 1
         const dotHighlighted = isWholeHighlighted || highlightedSegIdx === i || highlightedSegIdx === i - 1
+        const isDragging = draggingIdx === i
+        const canDrag = !measureActive
         return (
           <mesh
             key={`dot-${i}`}
@@ -302,15 +358,24 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea
             renderOrder={999}
             userData={{ isMeasurement: true }}
             onPointerEnter={(e) => { e.stopPropagation(); setHovered(i) }}
-            onPointerLeave={() => setHovered(null)}
+            onPointerLeave={() => { if (draggingIdx === null) setHovered(null) }}
+            onPointerDown={(e) => {
+              if (!canDrag) return
+              e.stopPropagation()
+              flyCameraRef.current?.setMeasureMode(true)
+              setDraggingIdx(i)
+              setDragPoints([...m.points])
+              gl.domElement.setPointerCapture(e.pointerId)
+            }}
             onClick={(e) => {
               e.stopPropagation()
+              if (didMoveRef.current) { didMoveRef.current = false; return }
               if (isEnd && !m.isClosed) onContinue(m.id)
             }}
           >
-            <sphereGeometry args={[dotRadius * (hovered === i ? 1.3 : dotHighlighted ? 1.2 : 1), 10, 10]} />
+            <sphereGeometry args={[dotRadius * (isDragging ? 1.4 : hovered === i ? 1.3 : dotHighlighted ? 1.2 : 1), 10, 10]} />
             <meshBasicMaterial
-              color={hovered === i && isEnd && !m.isClosed ? '#4ade80' : dotHighlighted ? '#facc15' : '#f97316'}
+              color={isDragging ? '#fbbf24' : hovered === i && canDrag ? '#fbbf24' : hovered === i && isEnd && !m.isClosed ? '#4ade80' : dotHighlighted ? '#facc15' : '#f97316'}
               depthTest={false}
             />
           </mesh>
@@ -400,19 +465,27 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea
         )
       })()}
 
-      {/* Tooltip on endpoint hover: "Click to continue" */}
-      {typeof hovered === 'number' && (hovered === 0 || hovered === pts.length - 1) && !m.isClosed && (
-        <Html position={[pts[hovered].x, pts[hovered].y + dotRadius * 3, pts[hovered].z]} center occlude={false}>
-          <div style={{
-            background: 'rgba(15,15,25,0.9)', color: '#4ade80',
-            padding: '3px 8px', borderRadius: 5, fontSize: 10,
-            fontFamily: 'system-ui', whiteSpace: 'nowrap',
-            pointerEvents: 'none', border: '1px solid rgba(74,222,128,0.3)',
-          }}>
-            Click to continue measuring
-          </div>
-        </Html>
-      )}
+      {/* Tooltip on point hover */}
+      {typeof hovered === 'number' && draggingIdx === null && (() => {
+        const isEnd = hovered === 0 || hovered === pts.length - 1
+        const canContinue = isEnd && !m.isClosed && measureActive
+        const canDrag = !measureActive
+        if (!canContinue && !canDrag) return null
+        return (
+          <Html position={[pts[hovered].x, pts[hovered].y + dotRadius * 3, pts[hovered].z]} center occlude={false}>
+            <div style={{
+              background: 'rgba(15,15,25,0.9)',
+              color: canDrag ? '#fbbf24' : '#4ade80',
+              padding: '3px 8px', borderRadius: 5, fontSize: 10,
+              fontFamily: 'system-ui', whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+              border: `1px solid ${canDrag ? 'rgba(251,191,36,0.3)' : 'rgba(74,222,128,0.3)'}`,
+            }}>
+              {canDrag ? 'Drag to edit' : 'Click to continue measuring'}
+            </div>
+          </Html>
+        )
+      })()}
     </>
   )
 }
@@ -422,7 +495,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea
 export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const {
     measureActive, measureSnap, bbox, measureTraceSerial, measureTracePts, setMeasureActive, surfaces,
-    savedMeasurements, addMeasurement, removeMeasurement,
+    savedMeasurements, addMeasurement, removeMeasurement, updateMeasurement,
     highlightedMeasurementId, highlightedSegmentIdx,
   } = useViewer()
   const { fmtLength, fmtArea } = useUnits()
@@ -708,9 +781,12 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
           dotRadius={dotRadius}
           onDelete={removeMeasurement}
           onContinue={handleContinue}
+          onUpdatePoints={updateMeasurement}
           fmt={fmt}
           fmtArea={fmtArea}
           highlightedSegIdx={highlightedMeasurementId === m.id ? (highlightedSegmentIdx ?? -1) : null}
+          measureActive={measureActive}
+          flyCameraRef={flyCameraRef}
         />
       ))}
 
