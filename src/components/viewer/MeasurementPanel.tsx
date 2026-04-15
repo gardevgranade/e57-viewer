@@ -30,19 +30,26 @@ function MeasurementRow({
   onDelete,
   onToggleVisibility,
   onHighlight,
+  onSetParent,
   fmt,
   fmtArea,
+  allMeasurements,
+  indent,
 }: {
   m: SavedMeasurement
   onRename: (id: string, label: string) => void
   onDelete: (id: string) => void
   onToggleVisibility: (id: string) => void
   onHighlight: (id: string | null, segIdx?: number | null) => void
+  onSetParent: (id: string, parentId: string | null) => void
   fmt: (v: number) => string
   fmtArea: (v: number) => string
+  allMeasurements: SavedMeasurement[]
+  indent?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
 
+  const isCutout = !!m.parentId
   const pts = m.points
   const segments = pts.slice(0, -1).map((p, i) => ({
     idx: i,
@@ -52,7 +59,17 @@ function MeasurementRow({
     ? dist3(pts[pts.length - 1], pts[0])
     : 0
   const totalDist = segments.reduce((s, seg) => s + seg.length, 0) + closingLength
-  const area = m.isClosed ? polygonArea3D(pts) : 0
+  const grossArea = m.isClosed ? polygonArea3D(pts) : 0
+  const cutoutArea = m.isClosed
+    ? allMeasurements
+        .filter(c => c.parentId === m.id && c.isClosed && c.points.length >= 3)
+        .reduce((s, c) => s + polygonArea3D(c.points), 0)
+    : 0
+  const netArea = grossArea - cutoutArea
+  // Possible parents: other closed measurements that are not cutouts and not this one
+  const possibleParents = allMeasurements.filter(
+    p => p.id !== m.id && p.isClosed && p.points.length >= 3 && !p.parentId
+  )
 
   return (
     <div style={{
@@ -60,6 +77,7 @@ function MeasurementRow({
       borderRadius: 6,
       overflow: 'hidden',
       opacity: m.visible ? 1 : 0.45,
+      marginLeft: indent ? 12 : 0,
     }}>
       {/* Header row */}
       <div
@@ -98,8 +116,11 @@ function MeasurementRow({
         {/* Color indicator */}
         <div style={{
           width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-          background: m.isClosed ? '#4ade80' : '#f97316',
+          background: isCutout ? '#ef4444' : m.isClosed ? '#4ade80' : '#f97316',
         }} />
+
+        {/* Cutout prefix */}
+        {isCutout && <span style={{ color: '#ef4444', fontSize: 9, flexShrink: 0 }}>↳</span>}
 
         {/* Editable label */}
         <input
@@ -130,13 +151,26 @@ function MeasurementRow({
         </button>
       </div>
 
-      {/* Area badge (closed polygons) */}
-      {m.isClosed && area > 0 && (
+      {/* Area badge */}
+      {m.isClosed && grossArea > 0 && !isCutout && (
         <div style={{
           padding: '0 6px 4px 25px',
-          fontSize: 10, color: '#4ade80', fontFamily: 'monospace', fontWeight: 600,
+          fontSize: 10, fontFamily: 'monospace', fontWeight: 600, lineHeight: 1.5,
         }}>
-          ⬡ {fmtArea(area)}
+          <span style={{ color: '#4ade80' }}>⬡ {fmtArea(netArea)}</span>
+          {cutoutArea > 0 && (
+            <span style={{ color: '#64748b', marginLeft: 6 }}>
+              ({fmtArea(grossArea)} − {fmtArea(cutoutArea)})
+            </span>
+          )}
+        </div>
+      )}
+      {m.isClosed && grossArea > 0 && isCutout && (
+        <div style={{
+          padding: '0 6px 4px 25px',
+          fontSize: 10, color: '#ef4444', fontFamily: 'monospace', fontWeight: 600,
+        }}>
+          − {fmtArea(grossArea)}
         </div>
       )}
 
@@ -188,6 +222,30 @@ function MeasurementRow({
             <span>Total</span>
             <span style={{ fontFamily: 'monospace' }}>{fmt(totalDist)}</span>
           </div>
+
+          {/* Parent assignment dropdown for closed measurements */}
+          {m.isClosed && m.points.length >= 3 && (
+            <div style={{
+              borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 4, marginTop: 3,
+              display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#64748b',
+            }}>
+              <span style={{ flexShrink: 0 }}>Parent:</span>
+              <select
+                value={m.parentId ?? ''}
+                onChange={e => onSetParent(m.id, e.target.value || null)}
+                style={{
+                  flex: 1, background: '#1e293b', border: '1px solid #334155',
+                  borderRadius: 3, color: '#94a3b8', fontSize: 9, padding: '1px 2px',
+                  outline: 'none', cursor: 'pointer',
+                }}
+              >
+                <option value="">None (standalone)</option>
+                {possibleParents.map(p => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -200,12 +258,30 @@ export default function MeasurementPanel() {
   const {
     savedMeasurements, removeMeasurement, updateMeasurementLabel, clearAllMeasurements,
     toggleMeasurementVisibility, setHighlightedMeasurement,
-    measureActive, setMeasureActive,
+    measureActive, setMeasureActive, setMeasurementParent,
   } = useViewer()
   const { fmtLength, fmtArea } = useUnits()
   const [open, setOpen] = useState(true)
 
   if (savedMeasurements.length === 0 && !measureActive) return null
+
+  // Organize: top-level measurements first, then cutouts right after their parent
+  const topLevel = savedMeasurements.filter(m => !m.parentId)
+  const orderedRows: { m: SavedMeasurement; indent: boolean }[] = []
+  for (const m of topLevel) {
+    orderedRows.push({ m, indent: false })
+    const cutouts = savedMeasurements.filter(c => c.parentId === m.id)
+    for (const c of cutouts) {
+      orderedRows.push({ m: c, indent: true })
+    }
+  }
+  // Also include orphaned cutouts (parent deleted)
+  const usedIds = new Set(orderedRows.map(r => r.m.id))
+  for (const m of savedMeasurements) {
+    if (!usedIds.has(m.id)) {
+      orderedRows.push({ m, indent: false })
+    }
+  }
 
   return (
     <div style={{
@@ -244,7 +320,7 @@ export default function MeasurementPanel() {
           {/* Measurement list */}
           {savedMeasurements.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
-              {savedMeasurements.map(m => (
+              {orderedRows.map(({ m, indent }) => (
                 <MeasurementRow
                   key={m.id}
                   m={m}
@@ -252,8 +328,11 @@ export default function MeasurementPanel() {
                   onDelete={removeMeasurement}
                   onToggleVisibility={toggleMeasurementVisibility}
                   onHighlight={(id, segIdx) => setHighlightedMeasurement(id, segIdx ?? null)}
+                  onSetParent={setMeasurementParent}
                   fmt={fmtLength}
                   fmtArea={fmtArea}
+                  allMeasurements={savedMeasurements}
+                  indent={indent}
                 />
               ))}
             </div>

@@ -435,7 +435,12 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
       addMeasurement: (m) =>
         setState(s => ({ ...s, savedMeasurements: [...s.savedMeasurements, m] })),
       removeMeasurement: (id) =>
-        setState(s => ({ ...s, savedMeasurements: s.savedMeasurements.filter(m => m.id !== id) })),
+        setState(s => ({
+          ...s,
+          savedMeasurements: s.savedMeasurements
+            .filter(m => m.id !== id)
+            .map(m => m.parentId === id ? { ...m, parentId: null } : m),
+        })),
       updateMeasurementLabel: (id, label) =>
         setState(s => ({
           ...s,

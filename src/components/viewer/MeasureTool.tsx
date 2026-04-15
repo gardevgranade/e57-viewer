@@ -45,6 +45,40 @@ function centroid(pts: MeasurePoint[]): [number, number, number] {
   ]
 }
 
+/** Project 3D polygon onto its dominant 2D plane and test if a point is inside */
+function pointInPolygon3D(testPt: MeasurePoint, polygon: MeasurePoint[]): boolean {
+  if (polygon.length < 3) return false
+  // Compute polygon normal via Newell's method
+  let nx = 0, ny = 0, nz = 0
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i], b = polygon[(i + 1) % polygon.length]
+    nx += (a.y - b.y) * (a.z + b.z)
+    ny += (a.z - b.z) * (a.x + b.x)
+    nz += (a.x - b.x) * (a.y + b.y)
+  }
+  // Pick the two axes with the largest normal component (drop dominant axis)
+  const anx = Math.abs(nx), any = Math.abs(ny), anz = Math.abs(nz)
+  let getU: (p: MeasurePoint) => number, getV: (p: MeasurePoint) => number
+  if (anx >= any && anx >= anz) {
+    getU = p => p.y; getV = p => p.z
+  } else if (any >= anx && any >= anz) {
+    getU = p => p.x; getV = p => p.z
+  } else {
+    getU = p => p.x; getV = p => p.y
+  }
+  // 2D ray-casting test
+  const u = getU(testPt), v = getV(testPt)
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const ui = getU(polygon[i]), vi = getV(polygon[i])
+    const uj = getU(polygon[j]), vj = getV(polygon[j])
+    if ((vi > v) !== (vj > v) && u < ((uj - ui) * (v - vi)) / (vj - vi) + ui) {
+      inside = !inside
+    }
+  }
+  return inside
+}
+
 /** Angle (in degrees) between vectors (prev→vertex) and (vertex→next), 0–180 */
 function angleBetween(prev: MeasurePoint, vertex: MeasurePoint, next: MeasurePoint): number {
   const ax = prev.x - vertex.x, ay = prev.y - vertex.y, az = prev.z - vertex.z
@@ -216,7 +250,7 @@ function findSnap(
 
 // ── Saved measurement rendering ─────────────────────────────────────────────
 
-function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoints, fmt, fmtArea, highlightedSegIdx, measureActive, flyCameraRef, measureSnap, snapCandidates }: {
+function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoints, fmt, fmtArea, highlightedSegIdx, measureActive, flyCameraRef, measureSnap, snapCandidates, allMeasurements }: {
   m: SavedMeasurement
   dotRadius: number
   onDelete: (id: string) => void
@@ -230,6 +264,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
   flyCameraRef: React.RefObject<FlyCameraHandle | null>
   measureSnap: boolean
   snapCandidates: SnapCand[]
+  allMeasurements: SavedMeasurement[]
 }) {
   const [hovered, setHovered] = useState<'line' | number | null>(null)
   const [showMenu, setShowMenu] = useState<{ type: 'segment'; segIdx: number } | { type: 'point'; ptIdx: number } | null>(null)
@@ -315,15 +350,25 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
 
   if (!m.visible) return null
 
+  const isCutout = !!m.parentId
   const isWholeHighlighted = highlightedSegIdx === -1
   const pts = dragPoints ?? m.points
+  const lineColor = isCutout ? '#ef4444' : '#f97316'
+  const lineHighColor = isCutout ? '#fca5a5' : '#facc15'
 
   const totalDist = pts.length >= 2
     ? pts.slice(0, -1).reduce((s, p, i) => s + dist3(p, pts[i + 1]), 0)
     : 0
   const closingDist = m.isClosed ? dist3(pts[pts.length - 1], pts[0]) : 0
   const perimeter = totalDist + closingDist
-  const area = m.isClosed ? polygonArea3D(pts) : 0
+  const grossArea = m.isClosed ? polygonArea3D(pts) : 0
+  // Net area: subtract cutouts that belong to this measurement
+  const cutoutArea = m.isClosed
+    ? allMeasurements
+        .filter(c => c.parentId === m.id && c.isClosed && c.points.length >= 3)
+        .reduce((s, c) => s + polygonArea3D(c.points), 0)
+    : 0
+  const area = grossArea - cutoutArea
 
   return (
     <>
@@ -335,9 +380,12 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
           <Line
             key={`line-${i}`}
             points={[[p.x, p.y, p.z], [q.x, q.y, q.z]]}
-            color={segHighlighted ? '#facc15' : '#f97316'}
+            color={segHighlighted ? lineHighColor : lineColor}
             lineWidth={segHighlighted ? 4 : 2}
             depthTest={false}
+            dashed={isCutout}
+            dashSize={isCutout ? dotRadius * 2 : undefined}
+            gapSize={isCutout ? dotRadius * 1.5 : undefined}
           />
         )
       })}
@@ -348,9 +396,12 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
         return (
           <Line
             points={[[pts[pts.length - 1].x, pts[pts.length - 1].y, pts[pts.length - 1].z], [pts[0].x, pts[0].y, pts[0].z]]}
-            color={segHighlighted ? '#facc15' : '#f97316'}
+            color={segHighlighted ? lineHighColor : lineColor}
             lineWidth={segHighlighted ? 4 : 2}
             depthTest={false}
+            dashed={isCutout}
+            dashSize={isCutout ? dotRadius * 2 : undefined}
+            gapSize={isCutout ? dotRadius * 1.5 : undefined}
           />
         )
       })()}
@@ -423,7 +474,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
           >
             <sphereGeometry args={[dotRadius * (isDragging ? 1.4 : hovered === i ? 1.3 : dotHighlighted ? 1.2 : 1), 10, 10]} />
             <meshBasicMaterial
-              color={isDragging ? '#fbbf24' : hovered === i && canDrag ? '#fbbf24' : hovered === i && isEnd && !m.isClosed ? '#4ade80' : dotHighlighted ? '#facc15' : '#f97316'}
+              color={isDragging ? '#fbbf24' : hovered === i && canDrag ? '#fbbf24' : hovered === i && isEnd && !m.isClosed ? '#4ade80' : dotHighlighted ? '#facc15' : isCutout ? '#ef4444' : '#f97316'}
               depthTest={false}
             />
           </mesh>
@@ -486,7 +537,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
       })()}
 
       {/* Centroid area label for closed measurements */}
-      {m.isClosed && area > 0 && (() => {
+      {m.isClosed && !isCutout && area > 0 && (() => {
         const [cx, cy, cz] = centroid(pts)
         return (
           <Html position={[cx, cy + dotRadius * 2, cz]} center occlude={false}>
@@ -495,8 +546,30 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
               padding: '3px 8px', borderRadius: 5, fontSize: 11,
               fontFamily: 'monospace', whiteSpace: 'nowrap',
               pointerEvents: 'none', border: '1px solid rgba(74,222,128,0.4)',
+              lineHeight: 1.5,
             }}>
-              ⬡ {fmtArea(area)}
+              <div>⬡ {fmtArea(area)}</div>
+              {cutoutArea > 0 && (
+                <div style={{ color: '#ef4444', fontSize: 9 }}>
+                  − {fmtArea(cutoutArea)} cutouts
+                </div>
+              )}
+            </div>
+          </Html>
+        )
+      })()}
+      {/* Cutout area label */}
+      {m.isClosed && isCutout && grossArea > 0 && (() => {
+        const [cx, cy, cz] = centroid(pts)
+        return (
+          <Html position={[cx, cy + dotRadius * 2, cz]} center occlude={false}>
+            <div style={{
+              background: 'rgba(0,0,0,0.75)', color: '#ef4444',
+              padding: '3px 8px', borderRadius: 5, fontSize: 11,
+              fontFamily: 'monospace', whiteSpace: 'nowrap',
+              pointerEvents: 'none', border: '1px solid rgba(239,68,68,0.4)',
+            }}>
+              − {fmtArea(grossArea)}
             </div>
           </Html>
         )
@@ -641,7 +714,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
 export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const {
     measureActive, measureSnap, bbox, measureTraceSerial, measureTracePts, setMeasureActive, surfaces,
-    savedMeasurements, addMeasurement, removeMeasurement, updateMeasurement,
+    savedMeasurements, addMeasurement, removeMeasurement, updateMeasurement, setMeasurementParent,
     highlightedMeasurementId, highlightedSegmentIdx,
   } = useViewer()
   const { fmtLength, fmtArea } = useUnits()
@@ -652,6 +725,8 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
   const [draggingIdx, setDraggingIdx] = useState<number | null>(null)
   const [ghost, setGhost] = useState<{ pos: THREE.Vector3; type: SnapType | 'free' } | null>(null)
+  /** Cutout prompt: shown after saving a closed measurement that lies inside another */
+  const [cutoutPrompt, setCutoutPrompt] = useState<{ measurementId: string; parentId: string; parentLabel: string; position: [number, number, number] } | null>(null)
 
   const draggingIdxRef = useRef<number | null>(null)
   const justDraggedRef = useRef(false)
@@ -671,12 +746,26 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const saveActive = useCallback(() => {
     if (points.length >= 2) {
       const n = savedMeasurements.length + 1
-      addMeasurement({ id: nextMeasureId(), label: `Measurement ${n}`, points: [...points], isClosed, visible: true, parentId: null })
+      const newId = nextMeasureId()
+      addMeasurement({ id: newId, label: `Measurement ${n}`, points: [...points], isClosed, visible: true, parentId: null })
+
+      // Auto-detect: if this is a closed polygon, check if its centroid lies inside another closed measurement
+      if (isClosed && points.length >= 3) {
+        const [cx, cy, cz] = centroid(points)
+        const testPt: MeasurePoint = { x: cx, y: cy, z: cz }
+        for (const parent of savedMeasurements) {
+          if (!parent.isClosed || parent.points.length < 3 || parent.parentId) continue
+          if (pointInPolygon3D(testPt, parent.points)) {
+            setCutoutPrompt({ measurementId: newId, parentId: parent.id, parentLabel: parent.label, position: [cx, cy + dotRadiusRef.current * 14, cz] })
+            break
+          }
+        }
+      }
     }
     setPoints([])
     setIsClosed(false)
     setGhost(null)
-  }, [points, isClosed, addMeasurement, savedMeasurements.length])
+  }, [points, isClosed, addMeasurement, savedMeasurements])
 
   // When measure mode deactivates, save current measurement
   const prevActive = useRef(measureActive)
@@ -935,8 +1024,44 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
           flyCameraRef={flyCameraRef}
           measureSnap={measureSnap}
           snapCandidates={snapCandidates}
+          allMeasurements={savedMeasurements}
         />
       ))}
+
+      {/* Cutout prompt */}
+      {cutoutPrompt && (
+        <Html position={cutoutPrompt.position} center occlude={false}>
+          <div onPointerDown={(e) => e.stopPropagation()} style={{
+            background: 'rgba(15,15,25,0.95)', border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: 8, padding: '8px 12px', fontFamily: 'system-ui', fontSize: 11,
+            color: '#e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.6)', maxWidth: 220, textAlign: 'center',
+          }}>
+            <div style={{ marginBottom: 6, lineHeight: 1.4 }}>
+              Cutout of <strong style={{ color: '#f97316' }}>{cutoutPrompt.parentLabel}</strong>?
+            </div>
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+              <button
+                onClick={() => { setMeasurementParent(cutoutPrompt.measurementId, cutoutPrompt.parentId); setCutoutPrompt(null) }}
+                style={{
+                  padding: '3px 12px', borderRadius: 4, border: '1px solid #22c55e',
+                  background: '#16a34a', color: '#fff', cursor: 'pointer', fontSize: 10, fontWeight: 600,
+                }}
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => setCutoutPrompt(null)}
+                style={{
+                  padding: '3px 12px', borderRadius: 4, border: '1px solid #475569',
+                  background: '#334155', color: '#94a3b8', cursor: 'pointer', fontSize: 10, fontWeight: 600,
+                }}
+              >
+                No
+              </button>
+            </div>
+          </div>
+        </Html>
+      )}
 
       {/* ── Active measurement (being built) ── */}
 
