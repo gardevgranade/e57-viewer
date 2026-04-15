@@ -604,7 +604,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
         const canDrag = !measureActive
         if (!canContinue && !canDrag) return null
         return (
-          <Html position={[pts[hovered].x, pts[hovered].y + dotRadius * 3, pts[hovered].z]} center occlude={false}>
+          <Html position={[pts[hovered].x, pts[hovered].y + dotRadius * 10, pts[hovered].z]} center occlude={false}>
             <div style={{
               background: 'rgba(15,15,25,0.9)',
               color: canDrag ? '#fbbf24' : '#4ade80',
