@@ -216,7 +216,7 @@ function findSnap(
 
 // ── Saved measurement rendering ─────────────────────────────────────────────
 
-function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoints, fmt, fmtArea, highlightedSegIdx, measureActive, flyCameraRef }: {
+function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoints, fmt, fmtArea, highlightedSegIdx, measureActive, flyCameraRef, measureSnap, snapCandidates }: {
   m: SavedMeasurement
   dotRadius: number
   onDelete: (id: string) => void
@@ -228,6 +228,8 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
   highlightedSegIdx: number | null
   measureActive: boolean
   flyCameraRef: React.RefObject<FlyCameraHandle | null>
+  measureSnap: boolean
+  snapCandidates: SnapCand[]
 }) {
   const [hovered, setHovered] = useState<'line' | number | null>(null)
   const [showMenu, setShowMenu] = useState<{ segIdx: number } | null>(null)
@@ -254,6 +256,20 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
       const rect = gl.domElement.getBoundingClientRect()
       const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
       const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1
+
+      // Try snap first
+      if (measureSnap && snapCandidates.length > 0) {
+        const snap = findSnap(e.clientX, e.clientY, camera, rect, snapCandidates)
+        if (snap) {
+          const p = snap.pos
+          setDragPoints(prev => {
+            const pts = prev ?? [...m.points]
+            return pts.map((pt, i) => i === idx ? { x: p.x, y: p.y, z: p.z } : pt)
+          })
+          return
+        }
+      }
+
       rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
       const hits = rc.intersectObjects(scene.children, true)
         .filter(h => (h.object instanceof THREE.Points || h.object instanceof THREE.Mesh) && !h.object.userData?.isMeasurement)
@@ -281,7 +297,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
       gl.domElement.removeEventListener('pointermove', onMove)
       gl.domElement.removeEventListener('pointerup', onUp)
     }
-  }, [draggingIdx, bbox, camera, gl, scene, m, dragPoints, onUpdatePoints, flyCameraRef])
+  }, [draggingIdx, bbox, camera, gl, scene, m, dragPoints, onUpdatePoints, flyCameraRef, measureSnap, snapCandidates])
 
   if (!m.visible) return null
 
@@ -787,6 +803,8 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
           highlightedSegIdx={highlightedMeasurementId === m.id ? (highlightedSegmentIdx ?? -1) : null}
           measureActive={measureActive}
           flyCameraRef={flyCameraRef}
+          measureSnap={measureSnap}
+          snapCandidates={snapCandidates}
         />
       ))}
 
