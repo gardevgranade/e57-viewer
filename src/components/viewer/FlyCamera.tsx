@@ -132,7 +132,12 @@ const FlyCamera = forwardRef<FlyCameraHandle>((_, ref) => {
       camera.lookAt(orbitTarget.current)
     }
 
-    const onKeyDown = (e: KeyboardEvent) => keys.current.add(e.code)
+    const isTyping = () => {
+      const tag = document.activeElement?.tagName
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+        (document.activeElement as HTMLElement)?.isContentEditable === true
+    }
+    const onKeyDown = (e: KeyboardEvent) => { if (!isTyping()) keys.current.add(e.code) }
     const onKeyUp = (e: KeyboardEvent) => keys.current.delete(e.code)
     const onContextMenu = (e: Event) => e.preventDefault()
 

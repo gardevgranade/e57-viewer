@@ -137,7 +137,7 @@ export default function ViewerCanvas() {
     const handler = (e: KeyboardEvent) => {
       // Ignore if typing in input
       const tag = (e.target as HTMLElement).tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement).isContentEditable) return
 
       if (e.key === '?') { setShowShortcuts((v) => !v); return }
       if (e.key === 'Escape') {
