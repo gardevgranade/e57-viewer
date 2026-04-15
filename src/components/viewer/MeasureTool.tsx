@@ -453,7 +453,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
       {typeof hovered === 'number' && hovered === pts.length - 1 && pts.length >= 2 && (() => {
         const last = pts[pts.length - 1]
         return (
-          <Html position={[last.x, last.y + dotRadius * 4, last.z]} center occlude={false}>
+          <Html position={[last.x, last.y + dotRadius * 12, last.z]} center occlude={false}>
             <div style={{
               background: 'rgba(0,0,0,0.9)', color: '#fff',
               padding: '5px 10px', borderRadius: 5, fontSize: 11,
