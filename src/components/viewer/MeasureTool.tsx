@@ -243,6 +243,14 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
   // Keep ref in sync
   draggingIdxRef.current = draggingIdx
 
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!showMenu) return
+    const onClick = () => setShowMenu(null)
+    window.addEventListener('pointerdown', onClick)
+    return () => window.removeEventListener('pointerdown', onClick)
+  }, [showMenu])
+
   // Drag handler for saved measurement points
   useEffect(() => {
     if (draggingIdx === null) return
