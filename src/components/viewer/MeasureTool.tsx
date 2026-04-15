@@ -671,7 +671,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const saveActive = useCallback(() => {
     if (points.length >= 2) {
       const n = savedMeasurements.length + 1
-      addMeasurement({ id: nextMeasureId(), label: `Measurement ${n}`, points: [...points], isClosed, visible: true })
+      addMeasurement({ id: nextMeasureId(), label: `Measurement ${n}`, points: [...points], isClosed, visible: true, parentId: null })
     }
     setPoints([])
     setIsClosed(false)
@@ -887,7 +887,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     // Save current active measurement first
     if (points.length >= 2) {
       const n = savedMeasurements.length + 1
-      addMeasurement({ id: nextMeasureId(), label: `Measurement ${n}`, points: [...points], isClosed, visible: true })
+      addMeasurement({ id: nextMeasureId(), label: `Measurement ${n}`, points: [...points], isClosed, visible: true, parentId: null })
     }
     // Load saved measurement back as active
     setPoints([...m.points])

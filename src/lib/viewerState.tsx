@@ -32,6 +32,8 @@ export interface SavedMeasurement {
   points: Array<{ x: number; y: number; z: number }>
   isClosed: boolean
   visible: boolean
+  /** If set, this measurement is a cutout subtracted from the parent area */
+  parentId: string | null
 }
 
 export interface ViewerState {
@@ -156,6 +158,7 @@ export interface ViewerActions {
   setHighlightedMeasurement: (id: string | null, segmentIdx?: number | null) => void
   clearAllMeasurements: () => void
   updateMeasurement: (id: string, points: Array<{ x: number; y: number; z: number }>, isClosed: boolean) => void
+  setMeasurementParent: (id: string, parentId: string | null) => void
   setBoxSelectMode: (v: boolean) => void
   incrementModelVersion: () => void
   setLightSimulation: (v: boolean) => void
@@ -456,6 +459,13 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
           ...s,
           savedMeasurements: s.savedMeasurements.map(m =>
             m.id === id ? { ...m, points, isClosed } : m,
+          ),
+        })),
+      setMeasurementParent: (id, parentId) =>
+        setState(s => ({
+          ...s,
+          savedMeasurements: s.savedMeasurements.map(m =>
+            m.id === id ? { ...m, parentId } : m,
           ),
         })),
       setBoxSelectMode: (boxSelectMode) => setState(s => ({ ...s, boxSelectMode })),
