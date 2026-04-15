@@ -346,6 +346,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
 
   const draggingIdxRef = useRef<number | null>(null)
   const justDraggedRef = useRef(false)
+  const didMoveRef = useRef(false)
   const sphereClickRef = useRef<number | null>(null)
   const prevTraceSerialRef = useRef(0)
   const ghostRef = useRef<{ pos: THREE.Vector3; type: SnapType | 'free' } | null>(null)
@@ -454,10 +455,12 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     if (draggingIdx === null) return
 
     const rc = makeRaycaster(bbox)
+    didMoveRef.current = false
 
     const onMove = (e: PointerEvent) => {
       const idx = draggingIdxRef.current
       if (idx === null) return
+      didMoveRef.current = true
       sphereClickRef.current = null
       const rect = gl.domElement.getBoundingClientRect()
       const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
@@ -482,7 +485,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     }
 
     const onUp = () => {
-      justDraggedRef.current = true
+      justDraggedRef.current = didMoveRef.current
       setDraggingIdx(null)
       setHoveredIdx(null)
       flyCameraRef.current?.setMeasureMode(measureActive)

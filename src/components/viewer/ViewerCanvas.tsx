@@ -257,8 +257,9 @@ export default function ViewerCanvas() {
               style={{ background: '#0d1117' }}
             >
               {/* Default flat lighting (off when light simulation is active) */}
-              {!lightSimulation && <ambientLight intensity={0.4} />}
-              {!lightSimulation && <directionalLight position={[10, 10, 5]} intensity={0.8} />}
+              {!lightSimulation && <ambientLight intensity={1.0} />}
+              {!lightSimulation && <directionalLight position={[10, 10, 5]} intensity={1.2} />}
+              {!lightSimulation && <directionalLight position={[-8, 6, -10]} intensity={0.4} />}
 
               {/* Realistic light simulation with shadows */}
               {lightSimulation && <LightSimulation />}
