@@ -430,30 +430,39 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
         )
       })}
 
-      {/* Segment distance labels on hover */}
-      {typeof hovered === 'number' && hovered < pts.length - 1 && (() => {
-        const p = pts[hovered], q = pts[hovered + 1]
-        const d = dist3(p, q)
-        const [mx, my, mz] = mid3(p, q)
-        return (
-          <Html position={[mx, my + dotRadius * 2, mz]} center occlude={false}>
-            <div style={{
-              background: 'rgba(0,0,0,0.82)', color: '#f97316',
-              padding: '4px 9px', borderRadius: 6, fontSize: 12,
-              fontFamily: 'monospace', whiteSpace: 'nowrap',
-              pointerEvents: 'none', border: '1px solid rgba(249,115,22,0.5)',
-            }}>
-              {fmt(d)}
-            </div>
-          </Html>
-        )
+      {/* Segment distance labels on hover — show all adjacent segments */}
+      {typeof hovered === 'number' && (() => {
+        const segs: [number, number][] = []
+        // segment before hovered point
+        if (hovered > 0) segs.push([hovered - 1, hovered])
+        else if (m.isClosed && pts.length >= 3) segs.push([pts.length - 1, 0])
+        // segment after hovered point
+        if (hovered < pts.length - 1) segs.push([hovered, hovered + 1])
+        else if (m.isClosed && pts.length >= 3) segs.push([hovered, 0])
+        return segs.map(([a, b]) => {
+          const p = pts[a], q = pts[b]
+          const d = dist3(p, q)
+          const [mx, my, mz] = mid3(p, q)
+          return (
+            <Html key={`seg-${a}-${b}`} position={[mx, my + dotRadius * 2, mz]} center occlude={false}>
+              <div style={{
+                background: 'rgba(0,0,0,0.82)', color: '#f97316',
+                padding: '4px 9px', borderRadius: 6, fontSize: 12,
+                fontFamily: 'monospace', whiteSpace: 'nowrap',
+                pointerEvents: 'none', border: '1px solid rgba(249,115,22,0.5)',
+              }}>
+                {fmt(d)}
+              </div>
+            </Html>
+          )
+        })
       })()}
 
-      {/* Total / area label on last point hover */}
-      {typeof hovered === 'number' && hovered === pts.length - 1 && pts.length >= 2 && (() => {
-        const last = pts[pts.length - 1]
+      {/* Total / area label on point hover */}
+      {typeof hovered === 'number' && pts.length >= 2 && (() => {
+        const p = pts[hovered]
         return (
-          <Html position={[last.x, last.y + dotRadius * 12, last.z]} center occlude={false}>
+          <Html position={[p.x, p.y + dotRadius * 12, p.z]} center occlude={false}>
             <div style={{
               background: 'rgba(0,0,0,0.9)', color: '#fff',
               padding: '5px 10px', borderRadius: 5, fontSize: 11,
