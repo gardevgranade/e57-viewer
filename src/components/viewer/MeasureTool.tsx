@@ -351,8 +351,8 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
             position={[mx, my, mz]}
             renderOrder={998}
             userData={{ isMeasurement: true }}
-            onPointerEnter={(e) => { e.stopPropagation(); setHovered('line') }}
-            onPointerLeave={() => { setHovered(null); setShowMenu(null) }}
+            onPointerEnter={(e) => { e.stopPropagation(); setHovered(h => typeof h === 'number' ? h : 'line') }}
+            onPointerLeave={() => { setHovered(h => h === 'line' ? null : h); setShowMenu(null) }}
             onClick={(e) => { e.stopPropagation(); setShowMenu({ segIdx: i }) }}
           >
             <sphereGeometry args={[dotRadius * 2.5, 4, 4]} />
@@ -375,6 +375,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, onUpdatePoin
             userData={{ isMeasurement: true }}
             onPointerEnter={(e) => { e.stopPropagation(); setHovered(i) }}
             onPointerLeave={() => { if (draggingIdx === null) setHovered(null) }}
+            onPointerOut={() => { if (draggingIdx === null) setHovered(h => h === i ? null : h) }}
             onPointerDown={(e) => {
               if (!canDrag) return
               e.stopPropagation()
