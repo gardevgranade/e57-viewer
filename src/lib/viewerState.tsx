@@ -34,6 +34,14 @@ export interface SavedMeasurement {
   visible: boolean
   /** If set, this measurement is a cutout subtracted from the parent area */
   parentId: string | null
+  /** Group this measurement belongs to */
+  groupId: string | null
+}
+
+export interface MeasurementGroup {
+  id: string
+  label: string
+  parentId: string | null
 }
 
 export interface ViewerState {
@@ -82,6 +90,7 @@ export interface ViewerState {
   lassoTriangleMode: boolean
   lassoSelectedTriangles: Array<{ surfaceId: string; triangleIndices: number[] }> | null
   savedMeasurements: SavedMeasurement[]
+  measurementGroups: MeasurementGroup[]
   /** ID of the measurement currently highlighted from the panel */
   highlightedMeasurementId: string | null
   /** Segment index highlighted within that measurement (null = whole measurement) */
@@ -159,6 +168,10 @@ export interface ViewerActions {
   clearAllMeasurements: () => void
   updateMeasurement: (id: string, points: Array<{ x: number; y: number; z: number }>, isClosed: boolean) => void
   setMeasurementParent: (id: string, parentId: string | null) => void
+  setMeasurementGroup: (id: string, groupId: string | null) => void
+  addMeasurementGroup: (g: MeasurementGroup) => void
+  removeMeasurementGroup: (id: string) => void
+  updateMeasurementGroup: (id: string, patch: Partial<Pick<MeasurementGroup, 'label'>>) => void
   setBoxSelectMode: (v: boolean) => void
   incrementModelVersion: () => void
   setLightSimulation: (v: boolean) => void
@@ -239,6 +252,7 @@ const initialState: ViewerState = {
   lassoTriangleMode: false,
   lassoSelectedTriangles: null,
   savedMeasurements: [],
+  measurementGroups: [],
   highlightedMeasurementId: null,
   highlightedSegmentIdx: null,
   boxSelectMode: false,
@@ -458,7 +472,7 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
       setHighlightedMeasurement: (id, segmentIdx = null) =>
         setState(s => ({ ...s, highlightedMeasurementId: id, highlightedSegmentIdx: segmentIdx ?? null })),
       clearAllMeasurements: () =>
-        setState(s => ({ ...s, savedMeasurements: [], highlightedMeasurementId: null, highlightedSegmentIdx: null })),
+        setState(s => ({ ...s, savedMeasurements: [], measurementGroups: [], highlightedMeasurementId: null, highlightedSegmentIdx: null })),
       updateMeasurement: (id, points, isClosed) =>
         setState(s => ({
           ...s,
@@ -472,6 +486,38 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
           savedMeasurements: s.savedMeasurements.map(m =>
             m.id === id ? { ...m, parentId } : m,
           ),
+        })),
+      setMeasurementGroup: (id, groupId) =>
+        setState(s => ({
+          ...s,
+          savedMeasurements: s.savedMeasurements.map(m =>
+            m.id === id ? { ...m, groupId } : m,
+          ),
+        })),
+      addMeasurementGroup: (group) =>
+        setState(s => ({ ...s, measurementGroups: [...s.measurementGroups, group] })),
+      removeMeasurementGroup: (id) =>
+        setState(s => {
+          // BFS to collect all descendant group IDs
+          const toRemove = new Set<string>()
+          const queue = [id]
+          while (queue.length) {
+            const cur = queue.shift()!
+            toRemove.add(cur)
+            s.measurementGroups.filter(g => g.parentId === cur).forEach(g => queue.push(g.id))
+          }
+          return {
+            ...s,
+            measurementGroups: s.measurementGroups.filter(g => !toRemove.has(g.id)),
+            savedMeasurements: s.savedMeasurements.map(m =>
+              m.groupId && toRemove.has(m.groupId) ? { ...m, groupId: null } : m,
+            ),
+          }
+        }),
+      updateMeasurementGroup: (id, patch) =>
+        setState(s => ({
+          ...s,
+          measurementGroups: s.measurementGroups.map(g => g.id === id ? { ...g, ...patch } : g),
         })),
       setBoxSelectMode: (boxSelectMode) => setState(s => ({ ...s, boxSelectMode })),
       incrementModelVersion: () => setState(s => ({ ...s, modelVersion: s.modelVersion + 1 })),

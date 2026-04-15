@@ -747,7 +747,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     if (points.length >= 2) {
       const n = savedMeasurements.length + 1
       const newId = nextMeasureId()
-      addMeasurement({ id: newId, label: `Measurement ${n}`, points: [...points], isClosed, visible: true, parentId: null })
+      addMeasurement({ id: newId, label: `Measurement ${n}`, points: [...points], isClosed, visible: true, parentId: null, groupId: null })
 
       // Auto-detect: if this is a closed polygon, check if its centroid lies inside another closed measurement
       if (isClosed && points.length >= 3) {
@@ -976,7 +976,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     // Save current active measurement first
     if (points.length >= 2) {
       const n = savedMeasurements.length + 1
-      addMeasurement({ id: nextMeasureId(), label: `Measurement ${n}`, points: [...points], isClosed, visible: true, parentId: null })
+      addMeasurement({ id: nextMeasureId(), label: `Measurement ${n}`, points: [...points], isClosed, visible: true, parentId: null, groupId: null })
     }
     // Load saved measurement back as active
     setPoints([...m.points])
