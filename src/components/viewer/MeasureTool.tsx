@@ -686,7 +686,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { setPoints([]); setIsClosed(false); setGhost(null) }
       // Enter to finish current measurement and save it
-      if (e.key === 'Enter' && points.length >= 2) { saveActive() }
+      if (e.key === 'Enter' && points.length >= 2) { saveActive(); setMeasureActive(false) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -1155,7 +1155,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
         return (
           <Html position={[last.x, last.y - dotRadius * 12, last.z]} center occlude={false}>
             <button
-              onClick={(e) => { e.stopPropagation(); saveActive() }}
+              onClick={(e) => { e.stopPropagation(); saveActive(); setMeasureActive(false) }}
               style={{
                 background: '#16a34a', color: '#fff',
                 border: 'none', borderRadius: 5, padding: '3px 10px',
