@@ -154,20 +154,23 @@ function findSnap(
 
 // ── Saved measurement rendering ─────────────────────────────────────────────
 
-function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea }: {
+function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea, highlightedSegIdx }: {
   m: SavedMeasurement
   dotRadius: number
   onDelete: (id: string) => void
   onContinue: (id: string) => void
   fmt: (v: number) => string
   fmtArea: (v: number) => string
+  /** Segment index highlighted from the panel (null = none, -1 = whole measurement) */
+  highlightedSegIdx: number | null
 }) {
   const [hovered, setHovered] = useState<'line' | number | null>(null)
   const [showMenu, setShowMenu] = useState<{ segIdx: number } | null>(null)
 
+  if (!m.visible) return null
+
+  const isWholeHighlighted = highlightedSegIdx === -1
   const pts = m.points
-  const linePoints = pts.map(p => [p.x, p.y, p.z] as [number, number, number])
-  const closedLinePoints = m.isClosed ? [...linePoints, linePoints[0]] : linePoints
 
   const totalDist = pts.length >= 2
     ? pts.slice(0, -1).reduce((s, p, i) => s + dist3(p, pts[i + 1]), 0)
@@ -178,10 +181,33 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea
 
   return (
     <>
-      {/* Lines (visible always) */}
-      {closedLinePoints.length >= 2 && (
-        <Line points={closedLinePoints} color="#f97316" lineWidth={2} depthTest={false} />
-      )}
+      {/* Lines — per-segment so we can highlight individually */}
+      {pts.length >= 2 && pts.slice(0, -1).map((p, i) => {
+        const q = pts[i + 1]
+        const segHighlighted = isWholeHighlighted || highlightedSegIdx === i
+        return (
+          <Line
+            key={`line-${i}`}
+            points={[[p.x, p.y, p.z], [q.x, q.y, q.z]]}
+            color={segHighlighted ? '#facc15' : '#f97316'}
+            lineWidth={segHighlighted ? 4 : 2}
+            depthTest={false}
+          />
+        )
+      })}
+      {/* Closing segment */}
+      {m.isClosed && pts.length >= 3 && (() => {
+        const segIdx = pts.length - 1
+        const segHighlighted = isWholeHighlighted || highlightedSegIdx === segIdx
+        return (
+          <Line
+            points={[[pts[pts.length - 1].x, pts[pts.length - 1].y, pts[pts.length - 1].z], [pts[0].x, pts[0].y, pts[0].z]]}
+            color={segHighlighted ? '#facc15' : '#f97316'}
+            lineWidth={segHighlighted ? 4 : 2}
+            depthTest={false}
+          />
+        )
+      })()}
 
       {/* Clickable line segments for delete */}
       {pts.slice(0, -1).map((p, i) => {
@@ -206,6 +232,7 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea
       {/* Measurement dots (clickable to continue) */}
       {pts.map((p, i) => {
         const isEnd = i === 0 || i === pts.length - 1
+        const dotHighlighted = isWholeHighlighted || highlightedSegIdx === i || highlightedSegIdx === i - 1
         return (
           <mesh
             key={`dot-${i}`}
@@ -219,9 +246,9 @@ function SavedMeasurementView({ m, dotRadius, onDelete, onContinue, fmt, fmtArea
               if (isEnd && !m.isClosed) onContinue(m.id)
             }}
           >
-            <sphereGeometry args={[dotRadius * (hovered === i ? 1.3 : 1), 10, 10]} />
+            <sphereGeometry args={[dotRadius * (hovered === i ? 1.3 : dotHighlighted ? 1.2 : 1), 10, 10]} />
             <meshBasicMaterial
-              color={hovered === i && isEnd && !m.isClosed ? '#4ade80' : '#f97316'}
+              color={hovered === i && isEnd && !m.isClosed ? '#4ade80' : dotHighlighted ? '#facc15' : '#f97316'}
               depthTest={false}
             />
           </mesh>
@@ -334,6 +361,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const {
     measureActive, measureSnap, bbox, measureTraceSerial, measureTracePts, setMeasureActive, surfaces,
     savedMeasurements, addMeasurement, removeMeasurement,
+    highlightedMeasurementId, highlightedSegmentIdx,
   } = useViewer()
   const { fmtLength, fmtArea } = useUnits()
   const fmt = fmtLength
@@ -362,7 +390,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
   const saveActive = useCallback(() => {
     if (points.length >= 2) {
       const n = savedMeasurements.length + 1
-      addMeasurement({ id: nextMeasureId(), label: `Measurement ${n}`, points: [...points], isClosed })
+      addMeasurement({ id: nextMeasureId(), label: `Measurement ${n}`, points: [...points], isClosed, visible: true })
     }
     setPoints([])
     setIsClosed(false)
@@ -578,7 +606,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
     // Save current active measurement first
     if (points.length >= 2) {
       const n = savedMeasurements.length + 1
-      addMeasurement({ id: nextMeasureId(), label: `Measurement ${n}`, points: [...points], isClosed })
+      addMeasurement({ id: nextMeasureId(), label: `Measurement ${n}`, points: [...points], isClosed, visible: true })
     }
     // Load saved measurement back as active
     setPoints([...m.points])
@@ -620,6 +648,7 @@ export default function MeasureTool({ flyCameraRef }: MeasureToolProps) {
           onContinue={handleContinue}
           fmt={fmt}
           fmtArea={fmtArea}
+          highlightedSegIdx={highlightedMeasurementId === m.id ? (highlightedSegmentIdx ?? -1) : null}
         />
       ))}
 

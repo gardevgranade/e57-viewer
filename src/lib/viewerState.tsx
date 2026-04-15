@@ -31,6 +31,7 @@ export interface SavedMeasurement {
   label: string
   points: Array<{ x: number; y: number; z: number }>
   isClosed: boolean
+  visible: boolean
 }
 
 export interface ViewerState {
@@ -79,6 +80,10 @@ export interface ViewerState {
   lassoTriangleMode: boolean
   lassoSelectedTriangles: Array<{ surfaceId: string; triangleIndices: number[] }> | null
   savedMeasurements: SavedMeasurement[]
+  /** ID of the measurement currently highlighted from the panel */
+  highlightedMeasurementId: string | null
+  /** Segment index highlighted within that measurement (null = whole measurement) */
+  highlightedSegmentIdx: number | null
   boxSelectMode: boolean
   /** Incremented to trigger model reload (e.g. after adding MTL/textures) */
   modelVersion: number
@@ -147,6 +152,8 @@ export interface ViewerActions {
   addMeasurement: (m: SavedMeasurement) => void
   removeMeasurement: (id: string) => void
   updateMeasurementLabel: (id: string, label: string) => void
+  toggleMeasurementVisibility: (id: string) => void
+  setHighlightedMeasurement: (id: string | null, segmentIdx?: number | null) => void
   clearAllMeasurements: () => void
   updateMeasurement: (id: string, points: Array<{ x: number; y: number; z: number }>, isClosed: boolean) => void
   setBoxSelectMode: (v: boolean) => void
@@ -229,6 +236,8 @@ const initialState: ViewerState = {
   lassoTriangleMode: false,
   lassoSelectedTriangles: null,
   savedMeasurements: [],
+  highlightedMeasurementId: null,
+  highlightedSegmentIdx: null,
   boxSelectMode: false,
   modelVersion: 0,
   lightSimulation: false,
@@ -431,8 +440,17 @@ export function ViewerProvider({ children }: { children: React.ReactNode }) {
             m.id === id ? { ...m, label } : m,
           ),
         })),
+      toggleMeasurementVisibility: (id) =>
+        setState(s => ({
+          ...s,
+          savedMeasurements: s.savedMeasurements.map(m =>
+            m.id === id ? { ...m, visible: !m.visible } : m,
+          ),
+        })),
+      setHighlightedMeasurement: (id, segmentIdx = null) =>
+        setState(s => ({ ...s, highlightedMeasurementId: id, highlightedSegmentIdx: segmentIdx ?? null })),
       clearAllMeasurements: () =>
-        setState(s => ({ ...s, savedMeasurements: [] })),
+        setState(s => ({ ...s, savedMeasurements: [], highlightedMeasurementId: null, highlightedSegmentIdx: null })),
       updateMeasurement: (id, points, isClosed) =>
         setState(s => ({
           ...s,

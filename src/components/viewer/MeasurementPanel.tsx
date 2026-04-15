@@ -28,12 +28,16 @@ function MeasurementRow({
   m,
   onRename,
   onDelete,
+  onToggleVisibility,
+  onHighlight,
   fmt,
   fmtArea,
 }: {
   m: SavedMeasurement
   onRename: (id: string, label: string) => void
   onDelete: (id: string) => void
+  onToggleVisibility: (id: string) => void
+  onHighlight: (id: string | null, segIdx?: number | null) => void
   fmt: (v: number) => string
   fmtArea: (v: number) => string
 }) {
@@ -55,12 +59,17 @@ function MeasurementRow({
       background: 'rgba(255,255,255,0.03)',
       borderRadius: 6,
       overflow: 'hidden',
+      opacity: m.visible ? 1 : 0.45,
     }}>
       {/* Header row */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: '5px 6px',
-      }}>
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '5px 6px',
+        }}
+        onMouseEnter={() => onHighlight(m.id)}
+        onMouseLeave={() => onHighlight(null)}
+      >
         {/* Expand toggle */}
         <button
           onClick={() => setExpanded(v => !v)}
@@ -71,6 +80,19 @@ function MeasurementRow({
           }}
         >
           {expanded ? '▼' : '▶'}
+        </button>
+
+        {/* Visibility toggle */}
+        <button
+          onClick={() => onToggleVisibility(m.id)}
+          title={m.visible ? 'Hide measurement' : 'Show measurement'}
+          style={{
+            background: 'none', border: 'none',
+            color: m.visible ? '#94a3b8' : '#475569',
+            cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1, flexShrink: 0,
+          }}
+        >
+          {m.visible ? '👁' : '👁‍🗨'}
         </button>
 
         {/* Color indicator */}
@@ -126,10 +148,16 @@ function MeasurementRow({
           display: 'flex', flexDirection: 'column', gap: 2,
         }}>
           {segments.map((seg, i) => (
-            <div key={i} style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              fontSize: 10, color: '#64748b',
-            }}>
+            <div
+              key={i}
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                fontSize: 10, color: '#64748b', padding: '1px 0', borderRadius: 3,
+                cursor: 'default',
+              }}
+              onMouseEnter={() => onHighlight(m.id, i)}
+              onMouseLeave={() => onHighlight(null)}
+            >
               <span>Segment {i + 1}</span>
               <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>
                 {fmt(seg.length)}
@@ -137,10 +165,15 @@ function MeasurementRow({
             </div>
           ))}
           {m.isClosed && closingLength > 0 && (
-            <div style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              fontSize: 10, color: '#64748b',
-            }}>
+            <div
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                fontSize: 10, color: '#64748b', padding: '1px 0', borderRadius: 3,
+                cursor: 'default',
+              }}
+              onMouseEnter={() => onHighlight(m.id, segments.length)}
+              onMouseLeave={() => onHighlight(null)}
+            >
               <span>Closing</span>
               <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>
                 {fmt(closingLength)}
@@ -166,6 +199,7 @@ function MeasurementRow({
 export default function MeasurementPanel() {
   const {
     savedMeasurements, removeMeasurement, updateMeasurementLabel, clearAllMeasurements,
+    toggleMeasurementVisibility, setHighlightedMeasurement,
     measureActive, setMeasureActive,
   } = useViewer()
   const { fmtLength, fmtArea } = useUnits()
@@ -216,6 +250,8 @@ export default function MeasurementPanel() {
                   m={m}
                   onRename={updateMeasurementLabel}
                   onDelete={removeMeasurement}
+                  onToggleVisibility={toggleMeasurementVisibility}
+                  onHighlight={(id, segIdx) => setHighlightedMeasurement(id, segIdx ?? null)}
                   fmt={fmtLength}
                   fmtArea={fmtArea}
                 />
