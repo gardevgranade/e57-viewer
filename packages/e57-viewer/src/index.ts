@@ -18,6 +18,9 @@ export type {
   StreamStatus,
 } from './types'
 
+// Config utilities
+export { resolveFeatures, buildConfigValue } from './config'
+
 // Hooks for advanced usage
 export { useViewer } from './lib/viewerState'
 export { useConfig } from './config'
