@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* E57 Viewer scoped styles */
+
+.e57-viewer-root {
+  --e57-sea-ink: #d7ece8;
+  --e57-sea-ink-soft: #afcdc8;
+  --e57-lagoon: #60d7cf;
+  --e57-lagoon-deep: #8de5db;
+  --e57-palm: #6ec89a;
+  --e57-sand: #0f1a1e;
+  --e57-foam: #101d22;
+  --e57-surface: rgba(16, 30, 34, 0.8);
+  --e57-surface-strong: rgba(15, 27, 31, 0.92);
+  --e57-line: rgba(141, 229, 219, 0.18);
+  --e57-inset-glint: rgba(194, 247, 238, 0.14);
+  --e57-kicker: #b8efe5;
+  --e57-bg-base: #0a1418;
+
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color: var(--e57-sea-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.e57-viewer-root *,
+.e57-viewer-root *::before,
+.e57-viewer-root *::after {
+  box-sizing: border-box;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

@@ -1,0 +1,532 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"ignorePatterns": [
+		"**/node_modules/**",
+		"**/dist/**",
+		"**/.next/**",
+		"**/.turbo/**",
+		"**/.vercel/**",
+		"**/.output/**",
+		"**/build/**",
+		"**/coverage/**",
+		"**/.vscode/**",
+		"**/.idea/**",
+		"**/*.config.js",
+		"**/*.config.cjs",
+		"**/*.config.mjs",
+		"**/vite.config.*",
+		"**/webpack.config.*",
+		"**/rollup.config.*",
+		"**/routeTree.gen.ts"
+	],
+	"plugins": [
+		"typescript",
+		"import",
+		"react",
+		"eslint",
+		"node",
+		"unicorn",
+		"jsx-a11y"
+	],
+	"categories": {
+		"correctness": "error", // Code that is outright wrong or useless.
+		"perf": "error", // Code that can be written to run faster.
+		"restriction": "error", // Lints which prevent the use of language and library features. Must not be enabled as a whole, should be considered on a case-by-case basis before enabling.
+		"nursery": "error", // New rules that are not yet fully vetted.
+		"pedantic": "error",
+		"suspicious": "error",
+		"style": "error"
+	},
+	"env": {
+		"browser": true
+	},
+	"rules": {
+		/**
+     * Typescript Plugin
+     **/
+		"typescript/await-thenable": "error",
+		"typescript/no-array-delete": "error",
+		"typescript/no-base-to-string": "error",
+		"typescript/no-confusing-void-expression": "error",
+		"typescript/no-duplicate-type-constituents": "error",
+		"typescript/no-floating-promises": "error",
+		"typescript/no-for-in-array": "error",
+		"typescript/no-implied-eval": "error",
+		"typescript/no-meaningless-void-operator": "error",
+		"typescript/no-misused-promises": [
+			"off",
+			{
+				"checksConditionals": false
+			}
+		], // Just nope! Or for realy good reasons! https://oxc.rs/docs/guide/usage/linter/rules/typescript/no-misused-promises.html#typescript-no-misused-promises
+		"typescript/no-misused-spread": "error",
+		"typescript/no-mixed-enums": "error",
+		"typescript/no-redundant-type-constituents": "error",
+		"typescript/no-unnecessary-boolean-literal-compare": "error",
+		"typescript/no-unnecessary-template-expression": "warn",
+		"typescript/no-unnecessary-type-arguments": "error",
+		"typescript/no-unnecessary-type-assertion": "warn",
+		"typescript/no-unsafe-argument": "error",
+		"typescript/no-unsafe-assignment": "error",
+		"typescript/no-unsafe-call": "error",
+		"typescript/no-unsafe-enum-comparison": "error",
+		"typescript/no-unsafe-member-access": "error",
+		"typescript/no-unsafe-return": "error",
+		/**
+     * This section has new rules that we have not yet decided on. For now, they are all turned off, but we should review them and turn on the ones that make sense for us.
+     */
+		"typescript/prefer-readonly-parameter-types": "off",
+		"import/no-relative-parent-imports": "off",
+		"import/no-nodejs-modules": "off",
+		"typescript/strict-void-return": "off",
+		"max-statements": "off",
+		"capitalized-comments": "off",
+		"react/jsx-max-depth": "off",
+		"no-inline-comments": "off",
+		"typescript/no-unnecessary-condition": "off",
+		"typescript/no-unnecessary-type-conversion": "off",
+		"typescript/consistent-return": "off",
+		"typescript/dot-notation": "off",
+		"no-shadow": "off",
+		"react/no-multi-comp": "off",
+		"react/no-clone-element": "off",
+		"complexity": "off", // we should review this rule and set a reasonable limit, but for now it is turned off to not block development
+		"react/no-array-index-key": "off", // sometimes this is the only option,
+		"no-use-before-define": "off",
+		"react/jsx-no-constructed-context-values": "off", // we should review this rule and enable it for better performance, but for now it is turned off to not block development
+		"typescript/no-useless-default-assignment": "off", // sometimes this is the best solution, e.g. when we want to set a default value for a parameter that is not optional
+		"typescript/prefer-optional-chain": "off", // sometimes optional chaining is not the best solution, e.g. when we want to throw an error if a value is null or undefined
+		"jsx_a11y/no-static-element-interactions": "off", // we should review this rule and enable it for better accessibility, but for now it is turned off to not block development
+		"unicorn/prefer-ternary": "off", // sometimes ternary is the best solution, e.g. when we want to conditionally render a component
+		/**/
+		"typescript/no-unsafe-type-assertion": "off", // Just nope! Or for realy good reasons! https://oxc.rs/docs/guide/usage/linter/rules/typescript/no-unsafe-type-assertion.html#typescript-no-unsafe-type-assertion
+		"typescript/no-unsafe-unary-minus": "error",
+		"typescript/non-nullable-type-assertion-style": "error",
+		"typescript/only-throw-error": "error",
+		"typescript/prefer-reduce-type-parameter": "error",
+		"typescript/prefer-return-this-type": "error",
+		"typescript/promise-function-async": "error",
+		"typescript/related-getter-setter-pairs": "error",
+		"typescript/require-array-sort-compare": "error",
+		"typescript/require-await": "error",
+		"typescript/restrict-plus-operands": "error",
+		"typescript/restrict-template-expressions": "error",
+		"typescript/return-await": "error",
+		"typescript/switch-exhaustiveness-check": "off", // Nope, or for really good reasons! https://oxc.rs/docs/guide/usage/linter/rules/typescript/switch-exhaustiveness-check.html#typescript-switch-exhaustiveness-check
+		"typescript/unbound-method": "error",
+		"typescript/use-unknown-in-catch-callback-variable": "error",
+		"typescript/strict-boolean-expressions": "off",
+		"typescript/no-deprecated": "off", // turn on again later
+		"typescript/prefer-nullish-coalescing": "off", // Turn on later again.. Nach der MESSE :-D
+		"no-console": [
+			"warn",
+			{
+				"allow": [
+					"warn",
+					"error",
+					"info",
+					"time",
+					"timeEnd",
+					"table"
+				]
+			}
+		],
+		"no-plusplus": [
+			"error",
+			{
+				"allowForLoopAfterthoughts": true
+			}
+		],
+		"no-array-reduce": "off", // Nützlich, einzige grund es zur vermeiden ist die lesbarkeit
+		"no-array-for-each": "off", // https://oxc.rs/docs/guide/usage/linter/rules/unicorn/no-array-for-each
+		"no-autofocus": "off", // Hat was mit Barrierefreiheit zu tun. Ggf. später
+		"restrict-template-expressions": "error",
+		"no-confusing-void-expression": "off", // Ggf. nochmal anschauen: return void ist damit gemaint e.g. return resolve(result);
+		"explicit-module-boundary-types": "off", // Brauchen wir nicht!
+		"explicit-function-return-type": "off", // Sollte wir nur bei performance kritischen funktionen aktivieren https://typescript-eslint.io/rules/explicit-function-return-type/
+		"no-default-export": "off", // Lässt sich teilweise nicht vermeiden
+		"class-methods-use-this": "warn",
+		"no-unused-vars": [
+			"warn",
+			{
+				"argsIgnorePattern": "^_",
+				"varsIgnorePattern": "^_"
+			}
+		],
+		// "no-process-env": ["error", { "ignores": ["**/env.ts", "**/*/env.ts"], }],
+		"no-void": "off", // Prinizpiell ist die Regel sinnvoll, allerdings nimmt sie uns die möglichkeit void anstelle von await zu nutzen.
+		/**
+     * hier nochmal drüber nachdenken
+     */
+		"only-export-components": "off",
+		"no-cycle": "off", // @TODO wir haben in usneren routes teileweise zyklische abhängigkeiten. das sollten wir beheben, aber bis dahin brauchen wir diese ausnahme
+		"no-undefined": "off", // utils.contact.all.setData(undefined, (prev) => {}) würde nicht mehr gehen
+		"no-alert": "warn",
+		"no-document-cookie": "off", // @Todo eine bessere lösung für cookies finden
+		/**
+     * Style
+     */
+		"no-ternary": "off", // manchmal ist ternary einfach die bessere lösung
+		"no-magic-numbers": "off", // @TODO we realy should move our numbers to consts, but for now this is too much work
+		"func-style": "off",
+		"id-length": "off", // Not practical, without exlusion list
+		"eslint/no-unsafe-optional-chaining": "off",
+		"curly": [
+			"error",
+			"multi-line",
+			"consistent"
+		],
+		"sort-keys": "off",
+		"no-null": "off",
+		"no-continue": "off",
+		"prefer-destructuring": "off",
+		"arrow-body-style": "off",
+		"filename-case": "off",
+		"prefer-default-export": "off",
+		"group-exports": "off",
+		"no-namespace": "off",
+		"switch-case-braces": "error",
+		"sort-imports": "off", // done by biome
+		"consistent-type-imports": [
+			"warn",
+			{
+				"prefer": "type-imports",
+				"fixStyle": "separate-type-imports"
+			}
+		],
+		"init-declarations": "off", // Nicht sinnvoll für uns
+		"exports-last": "off", // to unflexible
+		"jsx-curly-brace-presence": [
+			"error",
+			{
+				"props": "never",
+				"children": "never",
+				"propElementValues": "always"
+			}
+		],
+		"no-duplicate-imports": "off", // this breaks seperatio of type imports
+		"jsx-boolean-value": "off", // I do not like this rule
+		"self-closing-comp": "error",
+		"consistent-indexed-object-style": [
+			"error",
+			"record"
+		],
+		"prefer-global-this": "error",
+		"catch-error-name": "error",
+		"prefer-template": "error",
+		"text-encoding-identifier-case": "warn",
+		"numeric-separators-style": "error",
+		"error-message": "warn",
+		"no-duplicates": "warn",
+		"no-await-expression-member": "error",
+		"func-names": [
+			"error",
+			"never"
+		],
+		"new-cap": [
+			"error",
+			{
+				"properties": false
+			}
+		],
+		"consistent-type-specifier-style": [
+			"error",
+			"prefer-top-level"
+		],
+		"prefer-object-has-own": "error",
+		"no-mutable-exports": "error",
+		"max-params": [
+			"warn",
+			{
+				"max": 5
+			}
+		],
+		"array-type": [
+			"warn",
+			{
+				"default": "array"
+			}
+		],
+		"unicorn/no-nested-ternary": "warn",
+		"eslint/no-nested-ternary": "warn",
+		"unicorn/prefer-spread": "warn",
+		"import/no-named-export": "off",
+		"consistent-type-definitions": "off",
+		"no-zero-fractions": "warn",
+		"no-empty-interface": "off",
+		"prefer-exponentiation-operator": "warn",
+		"prefer-includes": "error",
+		"no-multi-assign": "error",
+		"jsx-fragments": "warn",
+		"prefer-optional-catch-binding": "warn",
+		"operator-assignment": "error",
+		"number-literal-case": "off", //conflicts with biome
+		"prefer-for-of": "off",
+		"no-template-curly-in-string": "warn",
+		"default-param-last": "warn",
+		"consistent-existence-index-check": "error",
+		"prefer-string-raw": "warn",
+		"jsx-pascal-case": [
+			"error",
+			{
+				"allowNamespace": true,
+				"ignore": [
+					"svg",
+					"Image"
+				]
+			}
+		],
+		"react/jsx-filename-extension": [
+			"error",
+			{
+				"extensions": [
+					".jsx",
+					".tsx"
+				]
+			}
+		],
+		/**
+     * pedantic rules
+     */
+		"max-lines-per-function": "off",
+		"explicit-length-check": "error",
+		"prefer-array-some": "off",
+		"prefer-string-replace-all": "error",
+		"max-dependencies": [
+			"off",
+			{
+				"max": 40
+			}
+		], // temporarily disabled in some files via // oxlint-disable max-dependencies
+		"require-await": "off",
+		"eqeqeq": "error",
+		"no-negated-condition": "error",
+		"no-else-return": "error",
+		"prefer-date-now": "error",
+		"max-lines": "off",
+		"array-callback-return": "error",
+		"no-useless-undefined": "error",
+		"prefer-string-slice": "error",
+		"prefer-event-target": "error",
+		"max-classes-per-file": "off",
+		"unicorn/no-lonely-if": "error",
+		"eslint/no-lonely-if": "error",
+		"jsx-no-useless-fragment": "error",
+		"no-static-only-class": "off",
+		"no-array-callback-reference": "error",
+		"no-useless-promise-resolve-reject": "error",
+		"max-depth": "error",
+		"prefer-type-error": "error",
+		"no-typeof-undefined": "error",
+		"prefer-regexp-test": "error",
+		"no-fallthrough": "error",
+		"prefer-dom-node-append": "error",
+		"ban-types": "error",
+		"prefer-ts-expect-error": "off", // we need to review all ts-ignore first
+		"ban-ts-comment": "off",
+		"no-object-as-default-parameter": "error",
+		"new-for-builtins": "error",
+		"prefer-code-point": "error",
+		"prefer-dom-node-remove": "error",
+		/**
+     * Suspicious
+     */
+		"react-in-jsx-scope": "off",
+		"no-array-sort": "error",
+		"no-array-reverse": "error",
+		"preserve-caught-error": "error",
+		"no-extraneous-class": "off",
+		"no-named-as-default": "off",
+		"consistent-function-scoping": "error",
+		"prefer-add-event-listener": "error",
+		"no-named-as-default-member": "off",
+		"iframe-missing-sandbox": "off",
+		"no-unneeded-ternary": "error",
+		"no-unassigned-import": "error"
+	},
+	"overrides": [
+		{
+			"files": [
+				"**/src/schemas/json*.ts"
+			],
+			"rules": {
+				"numeric-separators-style": "off" // for the time being
+			}
+		},
+		{
+			"files": [
+				"**/components/rjsf/**/*.tsx",
+				"**/components/rjsf/**/*.ts"
+			],
+			"rules": {
+				"typescript/no-explicit-any": "off" // for the time being
+			}
+		},
+		{
+			/**
+       * Temporarily disable no-unsafe-* for these files
+       */
+			"files": [
+				"**/*/GoogleMapField.tsx",
+				"**/*/sortable.tsx",
+				"**/*/services/scene-manager.ts",
+				"**/*/services/dxf-service.ts"
+			],
+			"rules": {
+				"typescript/no-unsafe-assignment": "off",
+				"typescript/no-unsafe-call": "off",
+				"typescript/no-unsafe-member-access": "off",
+				"typescript/no-unsafe-return": "off"
+			}
+		},
+		{
+			"files": [
+				"**/*.test.ts"
+			],
+			"rules": {
+				"no-console": "off",
+				"no-plusplus": "off",
+				"no-await-in-loop": "off",
+				"no-non-null-assertion": "off",
+				"unicorn/prefer-module": "off",
+			}
+		},
+		{
+			"files": [
+				"**/*.ts"
+			],
+			"env": {
+				"node": true
+			}
+		},
+		{
+			"files": [
+				"**/*.tsx"
+			],
+			"rules": {
+				"promise-function-async": "off",
+				"typescript/only-throw-error": "off" // tanstack router throws redirects
+			}
+		},
+		{
+			"files": [
+				"**/*.d.ts"
+			],
+			"rules": {
+				"no-unused-vars": "off",
+				"unambiguous": "off",
+			}
+		},
+		{
+			"files": [
+				"**/*.config.js",
+				"**/*.config.cjs",
+				"**/*.config.mjs"
+			],
+			"env": {
+				"node": true,
+				"browser": false
+			},
+			"rules": {
+				"import/no-commonjs": "off",
+				"import/no-nodejs-modules": "off",
+				"no-undef": "off"
+			}
+		},
+		{
+			"files": [
+				"**/vite.config.*",
+				"**/webpack.config.*",
+				"**/rollup.config.*"
+			],
+			"env": {
+				"node": true,
+				"browser": false
+			},
+			"rules": {
+				"no-undef": "off"
+			}
+		},
+		{
+			"files": [
+				"**/*.cy.ts",
+				"**/*.cy.tsx"
+			],
+			"env": {
+				"cypress/globals": true
+			}
+		},
+		{
+			"files": [
+				"**/*.cy.ts"
+			],
+			"rules": {
+				"unambiguous": "off",
+				"no-undef": "off"
+			}
+		},
+		{
+			"files": [
+				"**/components/viewer/**/*.tsx"
+			],
+			"rules": {
+				"react/no-unknown-property": "off",
+				"no-bitwise": "off"
+			}
+		},
+		{
+			"files": [
+				"**/lib/chunkCodec.ts",
+				"**/lib/surfaceDetect.ts",
+				"**/lib/meshSurfaceDetect.ts"
+			],
+			"rules": {
+				"no-bitwise": "off"
+			}
+		},
+		{
+			"files": [
+				"**/lib/surfaceDetect.ts",
+				"**/lib/meshSurfaceDetect.ts",
+				"**/lib/detectWorker.ts"
+			],
+			"rules": {
+				"unicorn/no-array-sort": "off"
+			}
+		},
+		{
+			"files": [
+				"**/lib/dxfLoader.ts"
+			],
+			"rules": {
+				"typescript/no-explicit-any": "off"
+			}
+		},
+		{
+			"files": [
+				"**/components/ErrorBoundary.tsx"
+			],
+			"rules": {
+				"react/state-in-constructor": "off",
+				"react/no-set-state": "off"
+			}
+		},
+		{
+			"files": [
+				"**/components/viewer/**/*.tsx",
+				"**/components/viewer/**/*.ts"
+			],
+			"rules": {
+				"react-hooks/exhaustive-deps": "off"
+			}
+		},
+		{
+			"files": [
+				"**/E57Viewer.tsx"
+			],
+			"rules": {
+				"import/no-unassigned-import": "off"
+			}
+		}
+	]
+}

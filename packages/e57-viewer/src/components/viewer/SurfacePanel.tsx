@@ -1,0 +1,817 @@
+
+
+import { useState, useEffect, useRef } from 'react'
+import { useViewer } from '../../lib/viewerState'
+import type { PickedSurface, SurfaceGroup } from '../../lib/viewerState'
+import { detectSurfacesAsync, detectMeshSurfacesAsync } from '../../lib/detectAsync'
+import { splitSurfaceTriangles } from '../../lib/meshSurfaceDetect'
+import { extractBoundaryPolygon } from '../../lib/surfaceBoundary'
+import { useUnits } from '../../lib/units'
+import * as THREE from 'three'
+
+function groupTotalArea(groupId: string, surfaceGroups: SurfaceGroup[], surfaces: PickedSurface[]): number {
+  // Collect all descendant group IDs (BFS)
+  const ids = new Set<string>()
+  const queue = [groupId]
+  while (queue.length > 0) {
+    const cur = queue.shift()
+    if (cur === undefined) continue
+    ids.add(cur)
+    surfaceGroups.filter(g => g.parentId === cur).forEach(g => queue.push(g.id))
+  }
+  return surfaces
+    .filter(s => s.groupId !== undefined && s.groupId !== null && ids.has(s.groupId) && s.area !== undefined && s.area !== null)
+    .reduce((sum, s) => sum + (s.area ?? 0), 0)
+}
+
+// --- SurfaceRow ---
+
+interface SurfaceRowProps {
+  surf: PickedSurface
+  groups: SurfaceGroup[]
+  selected: boolean
+  onUpdate: (id: string, patch: Partial<Pick<PickedSurface, 'label' | 'color' | 'visible' | 'groupId'>>) => void
+  onRemove: (id: string) => void
+  onSplit: (id: string) => void
+  onTrace: (id: string) => void
+  onHover: (id: string | null) => void
+  onSelect: (id: string | null) => void
+  /** Extra info line shown below the main row (slope, elevation, etc.) */
+  param?: string
+  onRef?: (el: HTMLDivElement | null) => void
+}
+
+/** Swap the type prefix of a label to a target type */
+function changeType(label: string, target: 'Wall' | 'Roof' | 'Floor'): string {
+  return label.replace(/^(wall|roof|floor)/i, target)
+}
+
+/** Get the display type label for a surface */
+function surfaceTypeLabel(label: string): 'Roof' | 'Floor' | 'Wall' | null {
+  if (/^roof/i.test(label)) return 'Roof'
+  if (/^floor/i.test(label)) return 'Floor'
+  if (/^wall/i.test(label)) return 'Wall'
+  return null
+}
+
+/** Format area or point count for display */
+function formatSurfaceInfo(surf: PickedSurface, fmtArea: (a: number) => string): string {
+  if (surf.area !== undefined && surf.area !== null) return fmtArea(surf.area)
+  if (surf.pointCount !== undefined && surf.pointCount !== null) {
+    if (surf.pointCount > 1000) return `${(surf.pointCount / 1000).toFixed(1)}k pts`
+    return `${String(surf.pointCount)} pts`
+  }
+  return ''
+}
+
+function SurfaceRow({ surf, groups, selected, onUpdate, onRemove, onSplit, onTrace, onHover, onSelect, param, onRef }: SurfaceRowProps) {
+  const { fmtArea } = useUnits()
+  const surfType = surfaceTypeLabel(surf.label)
+  return (
+    <div
+      ref={onRef}
+      onMouseEnter={() => onHover(surf.id)}
+      onMouseLeave={() => onHover(null)}
+      onClick={() => onSelect(selected ? null : surf.id)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelect(selected ? null : surf.id) }}
+      style={{ cursor: 'pointer', borderRadius: 6, outline: selected ? `2px solid ${surf.color}` : 'none' }}
+    >
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 4,
+      background: selected ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.03)',
+      borderRadius: param ? '5px 5px 0 0' : 5, padding: '3px 5px',
+      opacity: surf.visible ? 1 : 0.45,
+    }}>
+      {/* Color swatch / picker */}
+      <label aria-label="Pick color" style={{ cursor: 'pointer', flexShrink: 0, position: 'relative' }}>
+        <div style={{
+          width: 15, height: 15, borderRadius: 3,
+          background: surf.color, border: '2px solid rgba(255,255,255,0.2)',
+        }} />
+        <input
+          type="color"
+          value={surf.color}
+          onChange={e => onUpdate(surf.id, { color: e.target.value })}
+          style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+        />
+      </label>
+
+      {/* Label */}
+      <input
+        value={surf.label}
+        onClick={e => e.stopPropagation()}
+        onChange={e => onUpdate(surf.id, { label: e.target.value })}
+        style={{
+          flex: 1, background: 'transparent', border: 'none',
+          color: '#e2e8f0', fontSize: 11, fontWeight: 500,
+          outline: 'none', minWidth: 0,
+        }}
+      />
+
+      {/* Area or point count */}
+      <span style={{ color: '#64748b', fontSize: 10, flexShrink: 0 }}>
+        {formatSurfaceInfo(surf, fmtArea)}
+      </span>
+
+      {/* Type change: Wall / Roof / Floor */}
+      {surfType && (
+        <select
+          value={surfType}
+          onClick={e => e.stopPropagation()}
+          onChange={e => onUpdate(surf.id, { label: changeType(surf.label, e.target.value as 'Wall' | 'Roof' | 'Floor') })}
+          title="Change surface type"
+          style={{
+            background: '#1e293b', border: '1px solid #334155',
+            color: '#94a3b8', fontSize: 9, borderRadius: 3, padding: '0px 1px',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+        >
+          {(['Wall', 'Roof', 'Floor'] as const).map(t => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+      )}
+
+      {/* Group assignment dropdown */}
+      {groups.length > 0 && (
+        <select
+          value={surf.groupId ?? ''}
+          onChange={e => onUpdate(surf.id, { groupId: e.target.value || null })}
+          style={{
+            background: '#1e293b', border: '1px solid #334155',
+            color: '#94a3b8', fontSize: 10, borderRadius: 3, padding: '1px 2px',
+            cursor: 'pointer', maxWidth: 64,
+          }}
+        >
+          <option value="">None</option>
+          {groups.map(g => (
+            <option key={g.id} value={g.id}>{g.label}</option>
+          ))}
+        </select>
+      )}
+
+      {/* Visibility toggle */}
+      <button
+        type="button"
+        onClick={() => onUpdate(surf.id, { visible: !surf.visible })}
+        title={surf.visible ? 'Hide' : 'Show'}
+        style={{ background: 'none', border: 'none', color: surf.visible ? '#e2e8f0' : '#334155', cursor: 'pointer', fontSize: 12, padding: 0, lineHeight: 1 }}
+      >
+        {surf.visible ? '👁' : '🙈'}
+      </button>
+
+      {/* Trace perimeter with measure tool */}
+      {surf.worldTriangles && surf.worldTriangles.length >= 27 && (
+        <button
+          type="button"
+          onClick={() => onTrace(surf.id)}
+          title="Trace perimeter with measure tool"
+          style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}
+        >
+          📏
+        </button>
+      )}
+
+      {/* Split surface */}
+      {surf.worldTriangles && surf.worldTriangles.length >= 18 && (
+        <button
+          type="button"
+          onClick={() => onSplit(surf.id)}
+          title="Split into disconnected parts"
+          style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}
+        >
+          ✂️
+        </button>
+      )}
+
+      {/* Delete */}
+      <button
+        type="button"
+        onClick={() => onRemove(surf.id)}
+        title="Delete surface"
+        style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: 0, lineHeight: 1 }}
+      >
+        🗑
+      </button>
+    </div>
+    {param && (
+      <div style={{
+        background: 'rgba(255,255,255,0.02)', borderRadius: '0 0 5px 5px',
+        padding: '2px 8px', fontSize: 10, color: '#64748b',
+      }}>
+        {param}
+      </div>
+    )}
+    </div>
+  )
+}
+
+// --- SurfacePanel ---
+
+const BTN_BASE: React.CSSProperties = {
+  background: '#1e293b', border: '1px solid #334155',
+  borderRadius: 5, color: '#94a3b8', cursor: 'pointer',
+  fontSize: 11, fontWeight: 600,
+}
+
+// Derive surface type from label for filtering
+function surfaceType(label: string): 'roof' | 'floor' | 'wall' | 'other' {
+  const l = label.toLowerCase()
+  if (l.startsWith('roof')) return 'roof'
+  if (l.startsWith('floor')) return 'floor'
+  if (l.startsWith('wall')) return 'wall'
+  return 'other'
+}
+
+// Slope angle in degrees (from horizontal): arccos(|normalY|)
+function slopeAngle(normal: [number, number, number] | undefined): string | null {
+  if (!normal) return null
+  const absy = Math.abs(normal[1])
+  const angle = Math.acos(Math.min(1, absy)) * 180 / Math.PI
+  return `${angle.toFixed(1)}°`
+}
+
+// Centroid Y elevation from worldTriangles
+function elevation(wt: Float32Array | undefined): string | null {
+  if (!wt || wt.length < 9) return null
+  let sum = 0
+  const n = Math.floor(wt.length / 9)
+  for (let i = 0; i < n; i++) sum += wt[i * 9 + 1] ?? 0
+  return `Y: ${(sum / n).toFixed(2)} m`
+}
+
+export default function SurfacePanel() {
+  const {
+    streamStatus, fileType,
+    surfaces, setSurfaces, updateSurface, addSurface: _addSurface, removeSurface, replaceSurface,
+    surfaceGroups, addGroup, removeGroup, updateGroup,
+    setSurfaceColorMode, surfaceColorMode,
+    pickSurfaceMode, setPickSurfaceMode,
+    pointCloudGeoRef, meshObjectRef,
+    meshVisible, setMeshVisible,
+    traceSurfaceMeasure,
+    setHoveredSurfaceId,
+    selectedSurfaceId, setSelectedSurfaceId,
+    hoveredGroupId, setHoveredGroupId,
+    canUndo, canRedo, undo, redo,
+    setSurfaceTypeVisible,
+    lassoMode, setLassoMode,
+  } = useViewer()
+
+  const { fmtArea } = useUnits()
+  const [detecting, setDetecting] = useState(false)
+  const [open, setOpen] = useState(true)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [filterType, setFilterType] = useState<'all' | 'roof' | 'floor' | 'wall'>('all')
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
+  const [editingGroupLabel, setEditingGroupLabel] = useState('')
+  const [showHideHint, setShowHideHint] = useState(false)
+
+  // Ref map: surfaceId → DOM element for scroll-into-view
+  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  const isMesh = fileType && fileType !== 'e57'
+
+  // Auto-scroll + open panel when a surface is selected from 3D
+  useEffect(() => {
+    if (!selectedSurfaceId) return
+    setOpen(true)
+    // Give React a tick to render
+    setTimeout(() => {
+      rowRefs.current.get(selectedSurfaceId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 50)
+  }, [selectedSurfaceId])
+
+  if (streamStatus !== 'done') return null
+
+  function toggleGroupCollapsed(id: string) {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) { next.delete(id) } else { next.add(id) }
+      return next
+    })
+  }
+
+  function toggleGroupVisibility(groupId: string) {
+    // Collect all descendant group IDs
+    const ids = new Set<string>()
+    const queue = [groupId]
+    while (queue.length > 0) {
+      const cur = queue.shift()
+      if (cur === undefined) continue
+      ids.add(cur)
+      surfaceGroups.filter(g => g.parentId === cur).forEach(g => queue.push(g.id))
+    }
+    const allInTree = surfaces.filter(s => s.groupId !== undefined && s.groupId !== null && ids.has(s.groupId))
+    const anyVisible = allInTree.some(s => s.visible)
+    for (const s of allInTree) updateSurface(s.id, { visible: !anyVisible })
+  }
+
+  async function handleDetect() {
+    setDetecting(true)
+    try {
+      const geoData = pointCloudGeoRef.current
+      if (!geoData) return
+      const { geometry, matrixWorld, count } = geoData
+      const posAttr = geometry.getAttribute('position')
+      const worldPos = new Float32Array(count * 3)
+      const v = new THREE.Vector3()
+      for (let i = 0; i < count; i++) {
+        v.fromBufferAttribute(posAttr, i).applyMatrix4(matrixWorld)
+        worldPos[i * 3] = v.x
+        worldPos[i * 3 + 1] = v.y
+        worldPos[i * 3 + 2] = v.z
+      }
+      const detected = await detectSurfacesAsync(worldPos, count)
+      const picked: PickedSurface[] = detected.map(d => ({
+        id: d.id,
+        label: d.label,
+        color: d.color,
+        visible: d.visible,
+        groupId: null,
+        pointIndices: d.pointIndices,
+        pointCount: d.pointCount,
+        area: d.area,
+        worldTriangles: d.worldTriangles,
+        normal: d.normal,
+      }))
+      setSurfaces(picked)
+      if (isMesh && meshVisible) setShowHideHint(true)
+    } finally {
+      setDetecting(false)
+    }
+  }
+
+  async function handleMeshDetect() {
+    const obj = meshObjectRef.current
+    if (!obj) return
+    setDetecting(true)
+    try {
+      const detected = await detectMeshSurfacesAsync(obj)
+      const picked: PickedSurface[] = detected.map(d => ({
+        id: d.id, label: d.label, color: d.color, visible: d.visible,
+        groupId: null, area: d.area, worldTriangles: d.worldTriangles,
+        pointIndices: [], pointCount: d.pointCount, normal: d.normal,
+      }))
+      setSurfaces(picked)
+      if (meshVisible) setShowHideHint(true)
+    } finally {
+      setDetecting(false)
+    }
+  }
+
+  function handleClearAll() {
+    setSurfaces([])
+    setSurfaceColorMode(false)
+    if (pickSurfaceMode) setPickSurfaceMode(false)
+  }
+
+  function handleSplit(id: string) {
+    const surf = surfaces.find(s => s.id === id)
+    if (!surf?.worldTriangles) return
+    const parts = splitSurfaceTriangles(surf.worldTriangles)
+    if (parts.length <= 1) return // nothing to split
+    const COLORS = ['#ef4444','#3b82f6','#8b5cf6','#f59e0b','#10b981','#ec4899','#14b8a6','#f97316','#06b6d4','#84cc16']
+    const replacements: PickedSurface[] = parts.map((wt, i) => {
+      const triCount = Math.floor(wt.length / 9)
+      let area = 0
+      for (let t = 0; t < triCount; t++) {
+        const ax = wt[t*9] ?? 0, ay = wt[t*9+1] ?? 0, az = wt[t*9+2] ?? 0
+        const bx = wt[t*9+3] ?? 0, by = wt[t*9+4] ?? 0, bz = wt[t*9+5] ?? 0
+        const cx = wt[t*9+6] ?? 0, cy = wt[t*9+7] ?? 0, cz = wt[t*9+8] ?? 0
+        const e1x=bx-ax,e1y=by-ay,e1z=bz-az,e2x=cx-ax,e2y=cy-ay,e2z=cz-az
+        const nx=e1y*e2z-e1z*e2y, ny=e1z*e2x-e1x*e2z, nz=e1x*e2y-e1y*e2x
+        area += Math.hypot(nx, ny, nz) / 2
+      }
+      return {
+        id: crypto.randomUUID(),
+        label: `${surf.label} ${i + 1}`,
+        color: COLORS[i % COLORS.length] ?? '#ef4444',
+        visible: surf.visible,
+        groupId: surf.groupId,
+        area,
+        worldTriangles: wt,
+        pointIndices: [],
+        pointCount: triCount,
+      }
+    })
+    replaceSurface(id, replacements)
+  }
+
+  function handleTrace(id: string) {
+    const surf = surfaces.find(s => s.id === id)
+    if (!surf?.worldTriangles) return
+    const pts = extractBoundaryPolygon(surf.worldTriangles)
+    if (!pts || pts.length < 3) return
+    traceSurfaceMeasure(pts)
+  }
+
+  function matchesFilter(surf: PickedSurface) {
+    if (filterType === 'all') return true
+    return surfaceType(surf.label) === filterType
+  }
+
+  function handleAddGroup() {
+    addGroup({ id: `group-${Date.now()}`, label: `Group ${surfaceGroups.filter(g=>!g.parentId).length + 1}`, parentId: null })
+  }
+
+  const ungroupedSurfaces = surfaces.filter(s => (s.groupId === undefined || s.groupId === null) && matchesFilter(s))
+
+  /** Recursively render group tree starting from parentId */
+  function renderGroupTree(parentId: string | null, depth: number): React.ReactNode {
+    const children = surfaceGroups.filter(g => g.parentId === parentId)
+    if (children.length === 0) return null
+    return children.map(group => {
+      const inGroup = surfaces.filter(s => s.groupId === group.id && matchesFilter(s))
+      const collapsed = collapsedGroups.has(group.id)
+      // Collect all descendant group IDs for visibility/highlight checks
+      const descIds = new Set<string>()
+      const bfsQ = [group.id]
+      while (bfsQ.length > 0) {
+        const cur = bfsQ.shift()
+        if (cur === undefined) continue
+        descIds.add(cur)
+        surfaceGroups.filter(g => g.parentId === cur).forEach(g => bfsQ.push(g.id))
+      }
+      const allInTree = surfaces.filter(s => s.groupId !== undefined && s.groupId !== null && descIds.has(s.groupId))
+      const anyVisible = allInTree.some(s => s.visible)
+      const totalArea = groupTotalArea(group.id, surfaceGroups, surfaces)
+      const labelColor = depth === 0 ? '#f59e0b' : '#a5b4fc'
+      const bgHovered = depth === 0 ? 'rgba(245,158,11,0.12)' : 'rgba(165,180,252,0.10)'
+      const bgNormal = depth === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.03)'
+      const groupBg = hoveredGroupId === group.id ? bgHovered : bgNormal
+      return (
+        <div key={group.id}
+          onMouseEnter={() => setHoveredGroupId(group.id)}
+          onMouseLeave={() => setHoveredGroupId(null)}
+          style={{
+          background: groupBg,
+          borderRadius: 6, overflow: 'hidden',
+          marginLeft: depth * 10,
+          border: depth > 0 ? '1px solid rgba(165,180,252,0.12)' : 'none',
+        }}>
+          {/* Group header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 6px', borderBottom: collapsed ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
+            <button type="button" onClick={() => toggleGroupCollapsed(group.id)}
+              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 10, padding: 0, flexShrink: 0 }}>
+              {collapsed ? '▶' : '▼'}
+            </button>
+            {depth > 0 && <span style={{ color: '#475569', fontSize: 10, flexShrink: 0 }}>↳</span>}
+            {editingGroupId === group.id ? (
+              <input
+                autoFocus
+                value={editingGroupLabel}
+                onChange={e => setEditingGroupLabel(e.target.value)}
+                onBlur={() => {
+                  const trimmed = editingGroupLabel.trim()
+                  if (trimmed) updateGroup(group.id, { label: trimmed })
+                  setEditingGroupId(null)
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                  if (e.key === 'Escape') { setEditingGroupId(null) }
+                }}
+                style={{
+                  flex: 1, minWidth: 0, fontSize: 11, fontWeight: 700,
+                  background: '#1e293b', border: '1px solid #4f46e5',
+                  borderRadius: 4, color: labelColor, outline: 'none', padding: '1px 5px',
+                }}
+              />
+            ) : (
+              <span
+                onDoubleClick={() => { setEditingGroupId(group.id); setEditingGroupLabel(group.label) }}
+                style={{ flex: 1, minWidth: 0, fontSize: 11, fontWeight: 700, color: labelColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text' }}
+                title="Double-click to rename"
+              >
+                {group.label}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => { setEditingGroupId(group.id); setEditingGroupLabel(group.label) }}
+              title="Rename group"
+              style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: 0, flexShrink: 0 }}
+            >
+              ✏️
+            </button>
+            {totalArea > 0 && <span style={{ color: '#64748b', fontSize: 10, flexShrink: 0 }}>{fmtArea(totalArea)}</span>}
+            {/* Add subgroup */}
+            <button type="button" onClick={() => addGroup({ id: `group-${Date.now()}`, label: 'Subgroup', parentId: group.id })}
+              title="Add subgroup" style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: 0, flexShrink: 0 }}>
+              ＋
+            </button>
+            <button type="button" onClick={() => toggleGroupVisibility(group.id)}
+              title={anyVisible ? 'Hide group' : 'Show group'}
+              style={{ background: 'none', border: 'none', color: anyVisible ? '#e2e8f0' : '#334155', cursor: 'pointer', fontSize: 12, padding: 0, flexShrink: 0 }}>
+              {anyVisible ? '👁' : '🙈'}
+            </button>
+            <button type="button" onClick={() => removeGroup(group.id)} title="Delete group"
+              style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, padding: 0, flexShrink: 0 }}>
+              🗑
+            </button>
+          </div>
+
+          {!collapsed && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '3px 4px' }}>
+              {/* Surfaces in this group */}
+              {inGroup.length === 0 && !surfaceGroups.some(g => g.parentId === group.id)
+                ? <div style={{ color: '#475569', fontSize: 11, textAlign: 'center', padding: '4px 0' }}>No surfaces</div>
+                : inGroup.map(surf => {
+                    const t = surfaceType(surf.label)
+                    let p: string | undefined
+                    if (t === 'roof') {
+                      p = `Slope: ${slopeAngle(surf.normal) ?? '—'}`
+                    } else if (t === 'floor') {
+                      p = elevation(surf.worldTriangles) ?? undefined
+                    }
+                    return (
+                      <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups}
+                        selected={surf.id === selectedSurfaceId}
+                        onUpdate={updateSurface} onRemove={removeSurface}
+                        onSplit={handleSplit} onTrace={handleTrace}
+                        onHover={setHoveredSurfaceId} onSelect={setSelectedSurfaceId}
+                        onRef={el => { if (el) rowRefs.current.set(surf.id, el); else rowRefs.current.delete(surf.id) }}
+                        param={p} />
+                    )
+                  })
+              }
+              {/* Child groups (recursive) */}
+              {renderGroupTree(group.id, depth + 1)}
+              {inGroup.length > 0 && (
+                <div style={{ color: '#475569', fontSize: 10, textAlign: 'right', paddingRight: 4 }}>
+                  {inGroup.length} surface{inGroup.length === 1 ? '' : 's'}{totalArea > 0 ? ` · ${fmtArea(totalArea)}` : ''}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )
+    })
+  }
+
+  return (
+    <div style={{
+      position: 'absolute', top: 12, left: 12, zIndex: 10,
+      background: 'rgba(13,17,23,0.90)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: 10,
+      minWidth: 248, maxWidth: 288,
+      maxHeight: 'calc(100vh - 24px)',
+      display: 'flex', flexDirection: 'column',
+      backdropFilter: 'blur(8px)',
+      fontFamily: 'system-ui, sans-serif', fontSize: 12, color: '#e2e8f0',
+    }}>
+      {/* Header — always visible */}
+      <div style={{ padding: '10px 12px 0', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: open ? 8 : 10 }}>
+        <span style={{ fontWeight: 700, fontSize: 13 }}>Surfaces</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button type="button" onClick={undo} disabled={!canUndo} title="Undo (⌘Z)"
+            style={{ background: 'none', border: 'none', cursor: canUndo ? 'pointer' : 'default', fontSize: 14, lineHeight: 1, color: canUndo ? '#94a3b8' : '#334155', padding: '0 2px' }}>
+            ↩
+          </button>
+          <button type="button" onClick={redo} disabled={!canRedo} title="Redo (⌘⇧Z)"
+            style={{ background: 'none', border: 'none', cursor: canRedo ? 'pointer' : 'default', fontSize: 14, lineHeight: 1, color: canRedo ? '#94a3b8' : '#334155', padding: '0 2px' }}>
+            ↪
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(o => !o)}
+            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
+          >
+            {open ? '▲' : '▼'}
+          </button>
+        </div>
+      </div>
+      </div>{/* end header */}
+
+      {open && (
+        <div style={{ overflowY: 'auto', padding: '0 12px 10px', flex: 1, minHeight: 0 }}>
+          {/* ── "Hide model?" suggestion after detection ── */}
+          {showHideHint && isMesh && meshVisible && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+              background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.35)',
+              borderRadius: 7, padding: '6px 8px',
+            }}>
+              <span style={{ fontSize: 11, color: '#a5b4fc', flex: 1 }}>
+                💡 Hide model to see surfaces clearly
+              </span>
+              <button type="button" onClick={() => { setMeshVisible(false); setShowHideHint(false) }}
+                style={{ padding: '2px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                  background: '#4f46e5', border: 'none', borderRadius: 5, color: '#fff' }}>
+                Hide
+              </button>
+              <button type="button" onClick={() => setShowHideHint(false)}
+                style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 13, padding: 0 }}>
+                ✕
+              </button>
+            </div>
+          )}
+          {/* ── Filter pills + hide model ── */}
+          {surfaces.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
+              {(['all', 'roof', 'floor', 'wall'] as const).map(ft => (
+                <button type="button" key={ft} onClick={() => setFilterType(ft)} style={{
+                  padding: '1px 7px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                  background: filterType === ft ? '#334155' : 'transparent',
+                  border: '1px solid #334155', borderRadius: 10,
+                  color: filterType === ft ? '#e2e8f0' : '#64748b',
+                }}>
+                  {ft === 'all' ? 'All' : ft.charAt(0).toUpperCase() + ft.slice(1)}
+                </button>
+              ))}
+              {isMesh && (
+                <button type="button" onClick={() => setMeshVisible(!meshVisible)} style={{
+                  marginLeft: 'auto', padding: '1px 7px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                  background: meshVisible ? 'transparent' : '#1e293b',
+                  border: `1px solid ${meshVisible ? '#334155' : '#7c3aed'}`,
+                  borderRadius: 10, color: meshVisible ? '#64748b' : '#c4b5fd',
+                }}>
+                  {meshVisible ? '👁 Model' : '🙈 Model'}
+                </button>
+              )}
+            </div>
+          )}
+          {/* ── Per-type visibility toggles ── */}
+          {surfaces.length > 0 && (['roof', 'floor', 'wall'] as const).some(t =>
+            surfaces.some(s => s.label.toLowerCase().startsWith(t))
+          ) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+              {(['Roof', 'Floor', 'Wall'] as const).map(type => {
+                const ofType = surfaces.filter(s => s.label.toLowerCase().startsWith(type.toLowerCase()))
+                if (ofType.length === 0) return null
+                const allVisible = ofType.every(s => s.visible)
+                return (
+                  <button type="button" key={type}
+                    onClick={() => setSurfaceTypeVisible(type, !allVisible)}
+                    title={`${allVisible ? 'Hide' : 'Show'} all ${type}s`}
+                    style={{
+                      padding: '1px 7px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                      background: allVisible ? 'transparent' : '#1e293b',
+                      border: `1px solid ${allVisible ? '#334155' : '#7c3aed'}`,
+                      borderRadius: 10,
+                      color: allVisible ? '#64748b' : '#c4b5fd',
+                    }}>
+                    {allVisible ? '👁' : '🙈'} {type}s
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* ── Mesh: pick-surface toggle + auto-detect ── */}
+          {isMesh && (
+            <div style={{ marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => setPickSurfaceMode(!pickSurfaceMode)}
+                style={{
+                  width: '100%', padding: '6px 0',
+                  background: pickSurfaceMode ? '#4c1d95' : '#1e293b',
+                  border: `1px solid ${pickSurfaceMode ? '#7c3aed' : '#334155'}`,
+                  borderRadius: 6, color: pickSurfaceMode ? '#ddd6fe' : '#94a3b8',
+                  fontWeight: 600, cursor: 'pointer', fontSize: 12,
+                }}
+              >
+                🖱 {pickSurfaceMode ? 'Picking… (click to stop)' : 'Pick Surface'}
+              </button>
+              {pickSurfaceMode && (
+                <div style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center' }}>
+                  Click any face to select it
+                </div>
+              )}
+
+              {/* Auto-detect row */}
+              <button
+                type="button"
+                onClick={handleMeshDetect}
+                disabled={detecting}
+                style={{
+                  width: '100%', padding: '4px 0',
+                  background: detecting ? '#1e293b' : '#0f4c75',
+                  border: `1px solid ${detecting ? '#334155' : '#1a6fa8'}`,
+                  borderRadius: 5, color: detecting ? '#64748b' : '#7dd3fc',
+                  fontWeight: 600, cursor: detecting ? 'not-allowed' : 'pointer', fontSize: 11,
+                }}
+              >
+                {detecting ? '⏳…' : '🔍 Auto-Detect All'}
+              </button>
+
+              {/* Lasso selection tool */}
+              {surfaces.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setLassoMode(!lassoMode)}
+                  style={{
+                    width: '100%', padding: '6px 0',
+                    background: lassoMode ? '#1e3a5f' : '#1e293b',
+                    border: `1px solid ${lassoMode ? '#3b82f6' : '#334155'}`,
+                    borderRadius: 6,
+                    color: lassoMode ? '#93c5fd' : '#94a3b8',
+                    fontWeight: 600, cursor: 'pointer', fontSize: 12,
+                  }}
+                >
+                  ✏️ {lassoMode ? 'Lasso Active (Esc to exit)' : 'Lasso Select'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ── E57: detect button ── */}
+          {!isMesh && (
+            <button
+              type="button"
+              onClick={handleDetect}
+              disabled={detecting}
+              style={{
+                width: '100%', padding: '6px 0',
+                background: detecting ? '#1e293b' : '#1d4ed8',
+                border: 'none', borderRadius: 6,
+                color: detecting ? '#64748b' : '#fff',
+                fontWeight: 600, cursor: detecting ? 'not-allowed' : 'pointer',
+                fontSize: 12, marginBottom: 8,
+              }}
+            >
+              {detecting ? '⏳ Analyzing…' : '🔍 Detect All Surfaces'}
+            </button>
+          )}
+
+          {/* ── Surface list ── */}
+          {surfaces.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+
+              {/* Groups — rendered as tree, top-level first */}
+              {renderGroupTree(null, 0)}
+
+              {/* Ungrouped */}
+              {ungroupedSurfaces.length > 0 && (
+                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 6, overflow: 'hidden' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '4px 6px',
+                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                  }}>
+                    <span style={{ flex: 1, color: '#64748b', fontSize: 11, fontWeight: 600 }}>Ungrouped</span>
+                    {ungroupedSurfaces.reduce((s, x) => s + (x.area ?? 0), 0) > 0 && (
+                      <span style={{ color: '#64748b', fontSize: 10 }}>{fmtArea(ungroupedSurfaces.reduce((s, x) => s + (x.area ?? 0), 0))}</span>
+                    )}
+                    <span style={{ color: '#475569', fontSize: 10 }}>{ungroupedSurfaces.length} surface{ungroupedSurfaces.length === 1 ? '' : 's'}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '3px 4px' }}>
+                    {ungroupedSurfaces.map(surf => {
+                      const type = surfaceType(surf.label)
+                      let p: string | undefined
+                      if (type === 'roof') {
+                        p = `Slope: ${slopeAngle(surf.normal) ?? '—'}`
+                      } else if (type === 'floor') {
+                        p = elevation(surf.worldTriangles) ?? undefined
+                      }
+                      return (
+                        <SurfaceRow key={surf.id} surf={surf} groups={surfaceGroups}
+                          selected={surf.id === selectedSurfaceId}
+                          onUpdate={updateSurface} onRemove={removeSurface}
+                          onSplit={handleSplit} onTrace={handleTrace}
+                          onHover={setHoveredSurfaceId} onSelect={setSelectedSurfaceId}
+                          onRef={el => { if (el) rowRefs.current.set(surf.id, el); else rowRefs.current.delete(surf.id) }}
+                          param={p}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Bottom toolbar ── */}
+          <div style={{ display: 'flex', gap: 5, marginBottom: surfaces.length > 0 ? 6 : 0 }}>
+            <button type="button" onClick={handleAddGroup} style={{ ...BTN_BASE, flex: 1, padding: '4px 0' }}>
+              + New Group
+            </button>
+            <button type="button" onClick={handleClearAll} style={{ ...BTN_BASE, padding: '4px 10px' }}>
+              Clear All
+            </button>
+          </div>
+
+          {/* ── Colors toggle ── */}
+          {surfaces.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSurfaceColorMode(!surfaceColorMode)}
+              style={{
+                width: '100%', padding: '4px 0', fontSize: 11, fontWeight: 600,
+                background: surfaceColorMode ? '#166534' : '#1e293b',
+                border: `1px solid ${surfaceColorMode ? '#16a34a' : '#334155'}`,
+                borderRadius: 5, color: surfaceColorMode ? '#4ade80' : '#94a3b8',
+                cursor: 'pointer',
+              }}
+            >
+              {surfaceColorMode ? '● Colors ON' : '○ Colors OFF'}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
